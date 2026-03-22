@@ -507,6 +507,7 @@ function statusBadgeI18n(s) {{
 function latencyWidget(ms) {{
   if (ms < 0) return `<span class="latency-na">N/A</span>`;
   const cls = ms < 500 ? 'ok' : ms < 2000 ? 'warn' : 'err';
+  const icon = cls === 'ok' ? '✓' : cls === 'warn' ? '⚠' : '✗';
   const pct = Math.min(100, (ms / 3000) * 100);
   return `<div class="latency-gauge">
     <div class="gauge-bar"><div class="gauge-fill gauge-${{cls}}" style="width:${{pct}}%"></div></div>
@@ -521,7 +522,7 @@ function modelBadge(model) {{
   else if (low.includes('silicon') || low.includes('qwen') || low.includes('glm')) {{ cls = 'model-siliconflow'; label = '🟢 ' + model; }}
   else if (low.includes('gpt') || low.includes('openai')) {{ cls = 'model-openai'; label = '🟣 ' + model; }}
   else if (low.includes('claude') || low.includes('anthropic')) {{ cls = 'model-anthropic'; label = '🟡 ' + model; }}
-  return `<span class="model-badge ${{cls}}" title="${{model}}">${{label.length>28 ? label.slice(0,26)+'…' : label}}</span>`;
+  return `<span class="model-badge ${{cls}}" title="${{model}}">${{label.length>38 ? label.slice(0,36)+'…' : label}}</span>`;
 }}
 function subStatus(label, status) {{
   const cls = statusClass(status);
@@ -529,7 +530,7 @@ function subStatus(label, status) {{
   return `<span class="sub-status sub-${{cls}}">${{icon}} ${{label}}</span>`;
 }}
 function injectBar(used, limit, labelZh, labelEn) {{
-  const pct = Math.min(100, Math.round((used/limit)*100));
+  const pct = used > 0 ? Math.max(2, Math.min(100, Math.round((used/limit)*100))) : 0;
   return `<div class="inject-bar">
     <div class="inject-label">
       <span class="i18n-zh"><span class="i18n-zh">${{labelZh}}</span></span>
@@ -645,7 +646,7 @@ localCards.innerHTML += `<div class="card fade-in delay-4" style="--card-accent:
     ${{statusBadgeI18n(m.l3.status)}}
   </div>
   <table class="metrics-table">
-    <tr><td class="label"><span class="i18n-zh">文件數</span><span class="i18n-en">Documents</span></td><td class="value" style="font-size:20px;font-weight:800;color:var(--green)">${{m.l3.documents}}</td></tr>
+    <tr><td class="label"><span class="i18n-zh">文件數</span><span class="i18n-en">Documents</span></td><td class="value" style="font-size:16px;font-weight:700;color:var(--green)">${{m.l3.documents}}</td></tr>
     <tr><td class="label"><span class="i18n-zh">引擎</span><span class="i18n-en">Engine</span></td><td class="value">${{m.l3.engine}}</td></tr>
   </table>
   ${{injectBar(Math.round(m.l3.documents * 15), 5000, '索引容量', 'Index capacity')}}
