@@ -219,6 +219,7 @@ html = f"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧠 Memory Dashboard — OpenClaw</title>
+<meta http-equiv="refresh" content="3600">
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box; }}
   body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f172a; color:#e2e8f0; padding:16px; }}
@@ -280,7 +281,7 @@ html = f"""<!DOCTYPE html>
   <div class="card">
     <h2><span class="layer">L2</span> LanceDB Pro {badge(m['l2']['status'])}</h2>
     <table>
-      <tr><td>Vectors</td><td>{m['l2']['lance_files']} files ({m['l2']['db_size_mb']} MB)</td></tr>
+      <tr><td>Storage</td><td>{m['l2']['lance_files']} lance files ({m['l2']['db_size_mb']} MB)</td></tr>
       <tr><td>Embedding</td><td>{m['l2']['embedding_model']}</td></tr>
       <tr><td>Rerank</td><td>{m['l2']['rerank']}</td></tr>
       <tr><td>Decay</td><td>{m['l2']['halflife_days']}d half-life, {m['l2']['recency_weight']} weight</td></tr>
