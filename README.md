@@ -57,7 +57,14 @@
 - SiliconFlow API Key（LLM + Embedding）
 - Mac 上已安裝 OpenClaw 2026.3.x
 
-### 一鍵部署
+### 接入已有 NAS（其他 Mac Mini）
+
+```bash
+# 一鍵接入（替換 IP 和機器名）
+bash scripts/onboard-mac.sh 10.10.10.66 scott4
+```
+
+### 從零部署 NAS
 
 ```bash
 # 1. SSH 到 NAS
@@ -87,6 +94,7 @@ bash scripts/deploy-all.sh
 - [測試與驗證](docs/05-testing.md)
 - [已知問題與修復](docs/06-known-issues.md)
 - [踩坑紀錄](docs/07-lessons-learned.md)
+- [**多台 Mac Mini 接入指南**](docs/08-multi-mac-onboarding.md) — 含注意事項、命名規則、Checklist
 
 ## 環境資訊
 
