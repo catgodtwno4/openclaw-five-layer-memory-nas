@@ -116,3 +116,47 @@ return GenericAPIAdapter(
 
 - 14 天半衰期（接近 Ebbinghaus λ=0.05）
 - 0.25 權重（從 0.15 上調，讓衰減更明顯）
+
+## Update: Cognee MiniMax Migration Complete (2026-03-22 21:01)
+
+Scott#1 found the solution:
+1. **Merge system prompt into user message** (bypass MiniMax system role rejection)
+2. **Add max_tokens control** (prevent reasoning tokens from consuming all capacity)
+3. **Fix Cognee source bug** (`get_llm_client.py` CUSTOM provider missing endpoint)
+
+### Final Cognee Config
+
+```bash
+-e LLM_API_KEY=<minimax-key>
+-e LLM_MODEL=openai/MiniMax-M2.7-highspeed
+-e LLM_PROVIDER=custom
+-e LLM_ENDPOINT=https://api.minimaxi.com/v1
+-e OPENAI_API_KEY=<minimax-key>
+-e OPENAI_API_BASE=https://api.minimaxi.com/v1
+```
+
+### Adapter Patch (system→user merge)
+
+```python
+def _merge_system_into_user(messages):
+    merged = []
+    pending_system = []
+    for msg in messages:
+        if msg.get('role') == 'system':
+            pending_system.append(msg.get('content', ''))
+        else:
+            if pending_system:
+                sys_content = '\n'.join(pending_system)
+                if msg.get('role') == 'user':
+                    msg = dict(msg)
+                    msg['content'] = sys_content + '\n\n' + msg.get('content', '')
+                else:
+                    merged.append({'role': 'user', 'content': sys_content})
+                pending_system = []
+            merged.append(msg)
+    if pending_system:
+        merged.append({'role': 'user', 'content': '\n'.join(pending_system)})
+    return merged
+```
+
+### Verified: 96/96 tests passed, 5A+ certified
