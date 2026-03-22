@@ -39,14 +39,14 @@
 
 ## 各層說明
 
-| 層 | 組件 | 位置 | 觸發時機 | 功能 |
-|----|------|------|---------|------|
-| L0 | Markdown | Mac 本地 | 永遠在 | 持久記憶檔（SOUL.md / MEMORY.md / lessons.md） |
-| L1 | lossless-claw | Mac 本地 | 上下文滿 | 上下文無損壓縮（DAG 摘要） |
-| L2 | LanceDB Pro | Mac 本地 | 會話結束 | 語義向量搜索 + Rerank |
-| L2+ | MemOS | **NAS** | 跨會話 | 跨機器結構化記憶（fact/preference/skill 自動分類） |
-| L3 | QMD | Mac 本地 | 查詢時 | BM25 精確關鍵字搜索 |
-| L4 | Cognee | **NAS** | 啟動時 | 知識圖譜 + chunk 級語義搜索 |
+| 層 | 組件 | 位置 | 觸發時機 | 功能 | LLM 分配 |
+|----|------|------|---------|------|---------|
+| L0 | Markdown | Mac 本地 | 永遠在 | 持久記憶檔（SOUL.md / MEMORY.md / lessons.md） | — |
+| L1 | lossless-claw | Mac 本地 | 上下文滿 | 上下文無損壓縮（DAG 摘要） | MiniMax M2.7 HS |
+| L2 | LanceDB Pro | Mac 本地 | 會話結束 | 語義向量搜索 + Rerank | BAAI/bge-m3 (SiliconFlow) |
+| L2+ | MemOS | **NAS** | 跨會話 | 跨機器結構化記憶（fact/preference/skill 自動分類） | MiniMax M2.7 HS + BAAI/bge-m3 |
+| L3 | QMD | Mac 本地 | 查詢時 | BM25 精確關鍵字搜索 | — |
+| L4 | Cognee | **NAS** | 啟動時 | 知識圖譜 + chunk 級語義搜索 | MiniMax M2.7 HS + BAAI/bge-m3 |
 
 ## 快速開始
 
@@ -107,22 +107,66 @@ bash scripts/deploy-all.sh
 | MemOS | 2.0.10 |
 | Cognee | 0.5.5-local |
 | OpenClaw | 2026.3.13 |
-| LLM | Qwen/Qwen2.5-72B-Instruct (SiliconFlow) |
-| Embedding | BAAI/bge-m3 (SiliconFlow, 1024 dims) |
+| L1 LLM | MiniMax M2.7 HS |
+| L2 Embedding | BAAI/bge-m3 (SiliconFlow, 1024 dims) |
+| L2+ LLM | MiniMax M2.7 HS |
+| L2+ Embedding | BAAI/bge-m3 (SiliconFlow) |
+| L4 LLM | MiniMax M2.7 HS |
+| L4 Embedding | BAAI/bge-m3 (SiliconFlow) |
 
-## 5A+ 測試結果
+
+## Dashboard
+
+執行 `scripts/memory-dashboard.sh` 可查看五層記憶棧的即時狀態摘要：
+
+```bash
+bash scripts/memory-dashboard.sh
+```
+
+Dashboard 顯示內容：
+
+| 面板 | 說明 |
+|------|------|
+| 🗄️ L2 LanceDB Pro | 向量庫條目數、索引狀態、最近寫入時間 |
+| 🧠 L2+ MemOS | NAS API 健康狀態、記憶條目總數、分類統計（fact/preference/skill） |
+| 🕸️ L4 Cognee | 知識圖譜節點數、關係數、最近 cognify 時間 |
+| 🔍 L3 QMD | BM25 索引大小、最後更新時間 |
+| 🐳 Docker Services | NAS 上各容器（Neo4j / Qdrant / MemOS / Cognee）健康狀態 |
+| 📊 Overall Health | 五層整體健康分數（5A+ 評級） |
+
+## Test Results
+
+最新測試結果：**96/96 = 100%** ✅（含 MiniMax M2.7 HS 遷移後驗證）
+
+詳細測試報告：[docs/5a-test-results-final.md](docs/5a-test-results-final.md)
 
 ```
-L0  Markdown:      9/9   ✅ 100%
-L1  lossless-claw: 2/2   ✅ 100%
-L2  LanceDB Pro:   3/3   ✅ 100%
-L2+ MemOS:        11/11  ✅ 100%  (5 輪 Write + 5 輪 Search)
-L3  QMD:           2/2   ✅ 100%
-L4  Cognee:       16/16  ✅ 100%  (5 輪 Add + Cognify + Search)
-Cross-layer:      6/6   ✅ 100%
+L0  Markdown:      9/9   ✅
+L1  lossless-claw: 2/2   ✅
+L2  LanceDB Pro:   3/3   ✅
+L2+ MemOS:        16/16  ✅
+L3  QMD:           2/2   ✅
+L4  Cognee:       28/28  ✅
+Cross-layer:      36/36  ✅
 
-Total: 52/52 = 100% ✅
+Total: 96/96 = 100% ✅
 ```
+
+測試腳本位於 `scripts/` 目錄：
+- `scripts/final_5a_test.sh` — 完整 5A+ 測試套件
+- `scripts/stability_test.sh` — 穩定性壓測腳本
+
+## MiniMax Migration
+
+LLM 已從 Qwen2.5-72B-Instruct 遷移至 **MiniMax M2.7 HS**，國內直連無需代理，延遲更低。
+
+遷移文檔：[docs/minimax-migration.md](docs/minimax-migration.md)
+
+遷移重點：
+- L1 lossless-claw → MiniMax M2.7 HS（替換 Qwen2.5-72B）
+- L2+ MemOS → MiniMax M2.7 HS + BAAI/bge-m3（保留 SiliconFlow embedding）
+- L4 Cognee → MiniMax M2.7 HS + BAAI/bge-m3（保留 SiliconFlow embedding）
+- 遷移後跑 96/96 測試全數通過 ✅
 
 ## 相關倉庫
 
