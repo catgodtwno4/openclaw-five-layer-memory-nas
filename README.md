@@ -10,9 +10,9 @@
 │                                                          │
 │  L0 Markdown ─── L1 lossless-claw ─── L2 LanceDB Pro   │
 │       │                                     │            │
-│       │              L3 QMD (BM25)          │            │
+│       │              L4 QMD (BM25)          │            │
 │       │                                     │            │
-│       └──── L4 Cognee Sidecar ──────────────┘            │
+│       └──── L5 Cognee Sidecar ──────────────┘            │
 │                    │           │                          │
 └────────────────────┼───────────┼──────────────────────────┘
                      │           │
@@ -26,12 +26,12 @@
             │       │             │          │
             │  ┌────┴─────────────┴──────┐   │
             │  │      MemOS API          │   │
-            │  │      :8765 (L2+)        │   │
+            │  │      :8765 (L3)         │   │
             │  └─────────────────────────┘   │
             │                                │
             │  ┌─────────────────────────┐   │
             │  │     Cognee API          │   │
-            │  │     :8766 (L4)          │   │
+            │  │     :8766 (L5)          │   │
             │  │  (自帶 LanceDB 向量庫)   │   │
             │  └─────────────────────────┘   │
             └────────────────────────────────┘
@@ -39,14 +39,14 @@
 
 ## 各層說明
 
-| 層 | 組件 | 位置 | 功能 |
-|----|------|------|------|
-| L0 | Markdown | Mac 本地 | 持久記憶檔（SOUL.md / MEMORY.md / lessons.md） |
-| L1 | lossless-claw | Mac 本地 | 上下文無損壓縮（DAG 摘要） |
-| L2 | LanceDB Pro | Mac 本地 | 語義向量搜索 + Rerank |
-| L3 | QMD | Mac 本地 | BM25 精確關鍵字搜索 |
-| **L2+** | **MemOS** | **NAS** | 跨機器結構化記憶（fact/preference/skill 自動分類） |
-| **L4** | **Cognee** | **NAS** | 知識圖譜 + chunk 級語義搜索 |
+| 層 | 組件 | 位置 | 觸發時機 | 功能 |
+|----|------|------|---------|------|
+| L0 | Markdown | Mac 本地 | 永遠在 | 持久記憶檔（SOUL.md / MEMORY.md / lessons.md） |
+| L1 | lossless-claw | Mac 本地 | 上下文滿 | 上下文無損壓縮（DAG 摘要） |
+| L2 | LanceDB Pro | Mac 本地 | 會話結束 | 語義向量搜索 + Rerank |
+| L3 | MemOS | **NAS** | 跨會話 | 跨機器結構化記憶（fact/preference/skill 自動分類） |
+| L4 | QMD | Mac 本地 | 查詢時 | BM25 精確關鍵字搜索 |
+| L5 | Cognee | **NAS** | 啟動時 | 知識圖譜 + chunk 級語義搜索 |
 
 ## 快速開始
 
@@ -116,9 +116,9 @@ bash scripts/deploy-all.sh
 L0 Markdown:      9/9   ✅ 100%
 L1 lossless-claw: 2/2   ✅ 100%
 L2 LanceDB Pro:   3/3   ✅ 100%
-L3 QMD:           2/2   ✅ 100%
-L2+ MemOS:       11/11  ✅ 100%  (5 輪 Write + 5 輪 Search)
-L4 Cognee:       16/16  ✅ 100%  (5 輪 Add + Cognify + Search)
+L3 MemOS:        11/11  ✅ 100%  (5 輪 Write + 5 輪 Search)
+L4 QMD:           2/2   ✅ 100%
+L5 Cognee:       16/16  ✅ 100%  (5 輪 Add + Cognify + Search)
 Cross-layer:      6/6   ✅ 100%
 
 Total: 52/52 = 100% ✅
