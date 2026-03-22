@@ -1,4 +1,4 @@
-# Cognee 部署（L5 — 知識圖譜）
+# Cognee 部署（L4 — 知識圖譜）
 
 ## 1. 構建 Cognee Image（NAS 原生 x86_64）
 
