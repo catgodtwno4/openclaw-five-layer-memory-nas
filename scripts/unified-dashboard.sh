@@ -1631,6 +1631,9 @@ function statusBadge(status) {
 }
 
 function selectTask(task, progress) {
+  window._currentSelectedTask = task;
+  window._currentProgress = progress || [];
+  window._currentTaskSubtasks = task.subtasks || [];
   selectedTaskId = task.id;
   document.querySelectorAll('.task-card-compact').forEach(c => c.classList.remove('selected'));
   if (event && event.currentTarget) event.currentTarget.classList.add('selected');
@@ -1726,31 +1729,53 @@ function selectTask(task, progress) {
 // ─── Select Subtask (show info in right panel) ───
 function selectSubtask(idx) {
   const subtasks = window._currentTaskSubtasks || [];
+  const task = window._currentSelectedTask || {};
+  const progress = window._currentProgress || [];
   if (!subtasks[idx]) return;
   const s = subtasks[idx];
 
-  // Highlight selected subtask row
   document.querySelectorAll('#subtaskList .subtask-row').forEach(r => r.style.background = '');
   const rows = document.querySelectorAll('#subtaskList .subtask-row');
   if (rows[idx]) rows[idx].style.background = 'rgba(99,102,241,.12)';
 
-  // Update right panel top section to show subtask info
   const descTitle = document.getElementById('rightDescTitle');
   const descContent = document.getElementById('rightDescContent');
   if (!descTitle || !descContent) return;
-  descTitle.innerHTML = '<span class="i18n-zh">📝 子任務描述</span><span class="i18n-en">📝 Subtask Detail</span>';
-  descContent.innerHTML = `
-    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
-      <span style="font-size:16px">${s.done ? '☑' : '☐'}</span>
-      <div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${s.text}</div>
-        <span class="badge ${s.done ? 'badge-ok' : 'badge-warn'}" style="font-size:10px">
-          <span class="i18n-zh">${s.done ? '已完成' : '待辦'}</span>
-          <span class="i18n-en">${s.done ? 'Done' : 'Pending'}</span>
-        </span>
-      </div>
-    </div>
-  `;
+
+  // Section 1: Main task description
+  var html = '<div style="border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:10px;margin-bottom:10px">';
+  html += '<div style="font-size:11px;color:#94a3b8;font-weight:600;margin-bottom:4px">📝 主任務描述</div>';
+  html += '<div style="font-size:12px;color:#cbd5e1;line-height:1.5">' + (task.description||'無描述') + '</div></div>';
+
+  // Section 2: Subtask detail
+  html += '<div style="border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:10px;margin-bottom:10px">';
+  html += '<div style="font-size:11px;color:#94a3b8;font-weight:600;margin-bottom:6px">📋 子任務描述</div>';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px"><span style="font-size:16px">' + (s.done?'☑':'☐') + '</span><div>';
+  html += '<div style="font-size:13px;font-weight:600;margin-bottom:4px">' + s.text + '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:#94a3b8">';
+  html += '<span>📅 ' + (task.createdDate||'-') + '</span>';
+  html += '<span>⏰ ' + (task.dueDate||'-') + '</span>';
+  html += '<span>👤 ' + (task.assignee||'-') + '</span>';
+  html += '<span class="badge ' + (s.done?'badge-ok':'badge-warn') + '" style="font-size:10px">' + (s.done?'✅已完成':'⏳待辦') + '</span>';
+  html += '</div></div></div></div>';
+
+  // Section 3: Progress timeline
+  html += '<div><div style="font-size:11px;color:#94a3b8;font-weight:600;margin-bottom:6px">📋 進度記錄</div>';
+  var kw = s.text.substring(0,15);
+  var rel = progress.filter(function(p){ return p.title&&(p.title.includes(kw)||p.items&&p.items.some(function(i){return i.includes(kw)})); });
+  if(rel.length===0) rel = progress.slice(-3);
+  rel.forEach(function(p){
+    var c = p.title.includes('完成')?'#22c55e':p.title.includes('開始')?'#3b82f6':'#f59e0b';
+    html += '<div style="display:flex;gap:10px;margin-bottom:8px;font-size:11px">';
+    html += '<div style="display:flex;flex-direction:column;align-items:center;min-width:12px"><div style="width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0"></div><div style="width:1px;flex:1;background:rgba(255,255,255,.08)"></div></div>';
+    html += '<div><div style="font-weight:600">'+(p.timestamp||'')+'</div><div style="color:#94a3b8">'+(p.title||'')+'</div>';
+    if(p.items) p.items.slice(0,3).forEach(function(it){ html += '<div style="color:#64748b;font-size:10px;margin-top:2px">• '+it+'</div>'; });
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  descTitle.innerHTML = '📝 任務詳情';
+  descContent.innerHTML = html;
 }
 
 // ─── Subtask Filter ───
