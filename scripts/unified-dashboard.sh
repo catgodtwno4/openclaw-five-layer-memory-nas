@@ -553,25 +553,136 @@ html = r"""<!DOCTYPE html>
   .progress-blue { background: var(--blue); }
   .progress-amber { background: var(--amber); }
 
-  /* ── Tab 1: Tasks ── */
-  .tasks-layout {
-    display: grid;
-    grid-template-columns: 40% 60%;
-    gap: 16px;
+  /* ── Three-Panel Layout (Tasks + Memory) ── */
+  .three-panel {
+    display: flex;
+    gap: 0;
+    min-height: 500px;
     height: calc(100vh - 200px);
-  }
-  .task-list-panel {
-    overflow-y: auto;
-    display: flex; flex-direction: column; gap: 10px;
-    padding-right: 4px;
-  }
-  .task-detail-panel {
-    overflow-y: auto;
-    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 20px;
+    overflow: hidden;
+    background: var(--surface);
   }
+  .panel-left {
+    width: 25%;
+    min-width: 200px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-mid {
+    width: 35%;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-right {
+    width: 40%;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .panel-header {
+    padding: 10px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    position: sticky; top: 0;
+    background: var(--surface);
+    z-index: 2;
+  }
+  .panel-empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 200px; gap: 8px;
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+  .panel-empty div { font-size: 28px; }
+
+  /* ── Compact Stats (inside left panel) ── */
+  .stats-compact {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-mini {
+    text-align: center;
+    padding: 4px 2px;
+    border-radius: 6px;
+    background: rgba(255,255,255,.02);
+  }
+  .stat-mini-num { font-size: 16px; font-weight: 800; line-height: 1.2; }
+  .stat-mini-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .stat-mini.green .stat-mini-num { color: var(--green); }
+  .stat-mini.blue .stat-mini-num { color: var(--blue); }
+  .stat-mini.amber .stat-mini-num { color: var(--amber); }
+  .stat-mini.rose .stat-mini-num { color: var(--rose); }
+  .stat-mini.purple .stat-mini-num { color: #a855f7; }
+
+  /* ── Compact Task Card (left panel) ── */
+  .task-card-compact {
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all .15s;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid rgba(51,65,85,.4);
+  }
+  .task-card-compact:hover { background: var(--surface2); }
+  .task-card-compact.selected {
+    background: rgba(99,102,241,.12);
+    border-left-color: var(--accent);
+  }
+  .task-card-compact.status-done { border-left-color: var(--green); }
+  .task-card-compact.status-in_progress { border-left-color: var(--blue); }
+  .task-card-compact.status-pending { border-left-color: var(--amber); }
+  .task-card-compact.status-blocked { border-left-color: var(--rose); }
+  .task-card-compact .tc-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .task-card-compact .tc-title { font-size: 12px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-card-compact .tc-row2 { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+  .task-card-compact .progress-wrap { margin-top: 4px; }
+
+  /* ── Subtask Checklist (mid panel) ── */
+  .subtask-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(51,65,85,.3);
+    font-size: 12px; line-height: 1.5;
+  }
+  .subtask-row.done { opacity: 0.55; }
+  .subtask-row .st-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+  .subtask-row .st-text { flex: 1; }
+  .subtask-row .st-text.done-text { text-decoration: line-through; color: var(--muted); }
+
+  /* ── Task Info (right panel) ── */
+  .task-info-section { padding: 14px; }
+  .task-info-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .task-info-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .task-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12px; margin-bottom: 16px; }
+  .task-info-grid .tig-key { color: var(--muted); }
+  .task-info-grid .tig-val { font-weight: 500; }
+  .task-info-desc { font-size: 12px; color: var(--text); line-height: 1.6; padding: 10px; background: rgba(255,255,255,.02); border-radius: 8px; margin-bottom: 16px; }
+
+  /* ── Progress Timeline (right panel) ── */
+  .progress-timeline { padding: 0 14px 14px; }
+  .pt-header { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .pt-entry { display: flex; gap: 10px; margin-bottom: 10px; padding-left: 2px; position: relative; }
+  .pt-line { position: absolute; left: 3px; top: 12px; bottom: -10px; width: 2px; background: var(--border); }
+  .pt-entry:last-child .pt-line { display: none; }
+  .pt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; z-index: 1; }
+  .pt-dot-blue { background: var(--blue); }
+  .pt-dot-green { background: var(--green); }
+  .pt-dot-amber { background: var(--amber); }
+  .pt-body { flex: 1; }
+  .pt-date { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .pt-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .pt-items { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* Legacy task card (keep for backward compat) */
   .task-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 14px;
@@ -936,11 +1047,16 @@ html = r"""<!DOCTYPE html>
 
   /* Mobile */
   @media (max-width: 768px) {
-    .tasks-layout {
-      grid-template-columns: 1fr;
+    .three-panel {
+      flex-direction: column;
       height: auto;
     }
-    .task-list-panel { max-height: 50vh; }
+    .panel-left, .panel-mid, .panel-right {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      max-height: 50vh;
+    }
     .memory-panels {
       flex-direction: column;
       height: auto;
@@ -952,10 +1068,12 @@ html = r"""<!DOCTYPE html>
     }
     .mem-right-panel { min-height: 300px; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .stats-compact { grid-template-columns: repeat(3, 1fr); }
     .nav-time { display: none; }
   }
   @media (max-width: 480px) {
     .stats-row { grid-template-columns: 1fr; }
+    .stats-compact { grid-template-columns: repeat(2, 1fr); }
   }
 
   /* Scrollbar */
@@ -1064,37 +1182,50 @@ html = r"""<!DOCTYPE html>
       </button>
     </div>
 
-    <!-- Stats Summary Cards -->
-    <div class="stats-row" id="statsRow">
-      <div class="stat-card"><div class="stat-num" id="statTotal">—</div><div class="stat-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
-      <div class="stat-card green"><div class="stat-num" id="statDone">—</div><div class="stat-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
-      <div class="stat-card blue"><div class="stat-num" id="statInProgress">—</div><div class="stat-label"><span class="i18n-zh">進行中</span><span class="i18n-en">In Progress</span></div></div>
-      <div class="stat-card amber"><div class="stat-num" id="statPending">—</div><div class="stat-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
-      <div class="stat-card rose"><div class="stat-num" id="statBlocked">—</div><div class="stat-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
-      <div class="stat-card purple"><div class="stat-num" id="statRate">—</div><div class="stat-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
-    </div>
-
-    <!-- Filter Bar -->
-    <div class="filter-bar" id="filterBar">
-      <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
-      <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
-      <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
-      <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></button>
-      <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">已延誤</span><span class="i18n-en">Overdue</span></button>
-      <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></button>
-    </div>
-
-    <div class="tasks-layout">
-      <div class="task-list-panel" id="taskList">
-        <!-- Task cards injected here -->
-      </div>
-      <div class="task-detail-panel" id="taskDetail">
-        <div class="detail-empty">
-          <div>
-            <div style="font-size:32px;margin-bottom:8px">📋</div>
-            <span class="i18n-zh">點擊左側任務查看詳情</span>
-            <span class="i18n-en">Click a task to view details</span>
+    <!-- Three-Panel Tasks Layout -->
+    <div class="three-panel" id="tasksThreePanel">
+      <!-- Left Panel: Stats + Filter + Task List -->
+      <div class="panel-left">
+        <div class="stats-compact" id="statsCompact">
+          <div class="stat-mini"><div class="stat-mini-num" id="statTotal">—</div><div class="stat-mini-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
+          <div class="stat-mini green"><div class="stat-mini-num" id="statDone">—</div><div class="stat-mini-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
+          <div class="stat-mini blue"><div class="stat-mini-num" id="statInProgress">—</div><div class="stat-mini-label"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></div></div>
+          <div class="stat-mini amber"><div class="stat-mini-num" id="statPending">—</div><div class="stat-mini-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
+          <div class="stat-mini rose"><div class="stat-mini-num" id="statBlocked">—</div><div class="stat-mini-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
+          <div class="stat-mini purple"><div class="stat-mini-num" id="statRate">—</div><div class="stat-mini-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
+        </div>
+        <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
+          <div class="filter-bar" id="filterBar" style="margin-bottom:0">
+            <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
+            <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
+            <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">完成</span><span class="i18n-en">Done</span></button>
+            <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Todo</span></button>
+            <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">延誤</span><span class="i18n-en">Late</span></button>
+            <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Block</span></button>
           </div>
+        </div>
+        <div id="taskList" style="overflow-y:auto">
+          <!-- Compact task cards injected here -->
+        </div>
+      </div>
+
+      <!-- Middle Panel: Subtask List -->
+      <div class="panel-mid">
+        <div class="panel-header" id="taskMidHeader">
+          <span class="i18n-zh">子任務</span><span class="i18n-en">Subtasks</span>
+        </div>
+        <div id="taskMidContent">
+          <div class="panel-empty"><div>📝</div><span class="i18n-zh">← 點擊左側任務</span><span class="i18n-en">← Select a task</span></div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Task Info + Progress Timeline -->
+      <div class="panel-right">
+        <div class="panel-header" id="taskRightHeader">
+          <span class="i18n-zh">任務詳情</span><span class="i18n-en">Task Detail</span>
+        </div>
+        <div id="taskRightContent">
+          <div class="panel-empty"><div>📋</div><span class="i18n-zh">選擇任務查看詳情</span><span class="i18n-en">Select a task</span></div>
         </div>
       </div>
     </div>
@@ -1104,6 +1235,15 @@ html = r"""<!DOCTYPE html>
 <!-- Tab: Memory -->
 <div class="tab-content" id="tab-memory">
   <div class="page memory-page">
+    <!-- Memory Stats Summary Row -->
+    <div class="stats-row" id="memStatsRow" style="margin-bottom:12px">
+      <div class="stat-card blue"><div class="stat-num" id="memStatLayers">6</div><div class="stat-label"><span class="i18n-zh">記憶層</span><span class="i18n-en">Layers</span></div></div>
+      <div class="stat-card green"><div class="stat-num" id="memStatHealthy">—</div><div class="stat-label"><span class="i18n-zh">健康</span><span class="i18n-en">Healthy</span></div></div>
+      <div class="stat-card rose"><div class="stat-num" id="memStatIssues">—</div><div class="stat-label"><span class="i18n-zh">異常</span><span class="i18n-en">Issues</span></div></div>
+      <div class="stat-card blue"><div class="stat-num" id="memStatContainers">4</div><div class="stat-label"><span class="i18n-zh">NAS 容器</span><span class="i18n-en">Containers</span></div></div>
+      <div class="stat-card amber"><div class="stat-num" id="memStatLatency">—</div><div class="stat-label"><span class="i18n-zh">搜尋延遲</span><span class="i18n-en">Avg Latency</span></div></div>
+      <div class="stat-card purple"><div class="stat-num" id="memStatInjection">—</div><div class="stat-label"><span class="i18n-zh">注入總量</span><span class="i18n-en">Injection</span></div></div>
+    </div>
     <div class="memory-panels">
       <!-- Left: Layer list -->
       <div class="mem-left-panel">
@@ -1368,7 +1508,11 @@ function setFilter(filterId) {
 }
 
 // ─── Tasks ───
+let allFilteredTasks = [];
+let allProgress = [];
+
 function renderTasks(tasks, progress) {
+  allProgress = progress;
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = '';
 
@@ -1381,6 +1525,7 @@ function renderTasks(tasks, progress) {
       filtered = tasks.filter(t => t.status === currentFilter);
     }
   }
+  allFilteredTasks = filtered;
 
   if (!filtered.length) {
     listEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px 0">No tasks found</div>';
@@ -1394,38 +1539,37 @@ function renderTasks(tasks, progress) {
     const statusClass = task.status || 'pending';
     const progressCls = statusClass === 'done' ? 'progress-green' : statusClass === 'in_progress' ? 'progress-blue' : 'progress-amber';
     const isSelected = task.id === selectedTaskId;
-    const isOverdue = task.isOverdue;
 
     const card = document.createElement('div');
-    card.className = `task-card status-${statusClass}${isOverdue ? ' status-overdue' : ''} fade-in${isSelected ? ' selected' : ''}`;
-    card.style.animationDelay = (idx * 0.04) + 's';
+    card.className = `task-card-compact status-${statusClass} fade-in${isSelected ? ' selected' : ''}`;
+    card.style.animationDelay = (idx * 0.03) + 's';
+    card.dataset.taskId = task.id;
     card.innerHTML = `
-      <div class="task-card-header">
-        <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}">${task.priority || 'P3'}</span>
-        <span class="task-title">${task.title}</span>
+      <div class="tc-row1">
+        <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}" style="font-size:9px;padding:1px 5px">${task.priority || 'P3'}</span>
+        <span class="tc-title">${task.title}</span>
+        ${statusBadgeMini(task.status)}
       </div>
-      <div class="task-meta">
-        <span class="badge badge-cat">${task.category || 'General'}</span>
-        ${statusBadge(task.status)}
-        ${isOverdue ? '<span class="badge badge-overdue">🚨 已延誤</span>' : ''}
+      <div class="tc-row2">
+        ${task.assignee ? '<span>👤 ' + task.assignee + '</span>' : ''}
+        ${total > 0 ? '<span>' + done + '/' + total + '</span>' : ''}
       </div>
-      ${task.createdDate || task.dueDate || task.assignee ? `
-        <div class="task-date-row">
-          ${task.createdDate ? `<span>📅 ${task.createdDate}</span>` : ''}
-          ${task.dueDate ? `<span>⏰ ${task.dueDate}</span>` : ''}
-          ${task.assignee ? `<span class="badge-assignee">👤 ${task.assignee}</span>` : ''}
-        </div>
-      ` : ''}
-      ${total > 0 ? `
-        <div class="task-progress-label">${done}/${total} subtasks</div>
-        <div class="progress-wrap">
-          <div class="progress-fill ${progressCls}" style="width:${pct}%"></div>
-        </div>
-      ` : ''}
+      ${total > 0 ? '<div class="progress-wrap"><div class="progress-fill ' + progressCls + '" style="width:' + pct + '%"></div></div>' : ''}
     `;
     card.onclick = () => selectTask(task, progress);
     listEl.appendChild(card);
   });
+}
+
+function statusBadgeMini(status) {
+  const map = {
+    done: ['badge-ok', '✓'],
+    in_progress: ['badge-warn', '⚡'],
+    pending: ['badge-p3', '⏳'],
+    blocked: ['badge-err', '🚫'],
+  };
+  const [cls, icon] = map[status] || map.pending;
+  return '<span class="badge ' + cls + '" style="font-size:9px;padding:1px 4px">' + icon + '</span>';
 }
 
 function statusBadge(status) {
@@ -1441,72 +1585,91 @@ function statusBadge(status) {
 
 function selectTask(task, progress) {
   selectedTaskId = task.id;
-  document.querySelectorAll('.task-card').forEach(c => c.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+  document.querySelectorAll('.task-card-compact').forEach(c => c.classList.remove('selected'));
+  if (event && event.currentTarget) event.currentTarget.classList.add('selected');
 
   const done = task.subtasks.filter(s => s.done).length;
   const total = task.subtasks.length;
   const titleWords = task.title.toLowerCase().split(/[\s\/]+/).filter(w => w.length > 2);
-  const related = progress.filter(e =>
+  const related = (progress || allProgress).filter(e =>
     titleWords.some(w => e.title.toLowerCase().includes(w) || e.items.some(i => i.toLowerCase().includes(w)))
-  ).slice(0, 5);
+  ).slice(0, 8);
 
-  const detailEl = document.getElementById('taskDetail');
-  detailEl.innerHTML = `
-    <div class="detail-title">${task.title}</div>
-    <div class="detail-header">
-      <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}">${task.priority}</span>
-      <span class="badge badge-cat">${task.category}</span>
-      ${statusBadge(task.status)}
-      ${task.isOverdue ? '<span class="badge badge-overdue">已延誤</span>' : ''}
-      ${total > 0 ? `<span style="font-size:12px;color:var(--muted)">${done}/${total} (${Math.round(done/total*100)}%)</span>` : ''}
+  // ── Middle Panel: Subtask List ──
+  const midHeader = document.getElementById('taskMidHeader');
+  const midContent = document.getElementById('taskMidContent');
+  midHeader.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}" style="font-size:9px">${task.priority}</span>
+      <span style="font-size:11px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${task.title}</span>
+      ${statusBadgeMini(task.status)}
     </div>
-    ${task.createdDate || task.dueDate || task.assignee || task.description ? `
-      <div class="mem-kv-list">
-        ${task.createdDate ? `<div class="mem-kv-row"><span class="mem-kv-key">📅 Created</span><span class="mem-kv-val">${task.createdDate}</span></div>` : ''}
-        ${task.dueDate ? `<div class="mem-kv-row"><span class="mem-kv-key">⏰ Due</span><span class="mem-kv-val">${task.dueDate}</span></div>` : ''}
-        ${task.assignee ? `<div class="mem-kv-row"><span class="mem-kv-key">👤 Assignee</span><span class="mem-kv-val">${task.assignee}</span></div>` : ''}
-        ${task.description ? `<div class="mem-kv-row"><span class="mem-kv-key">📝 Description</span><span class="mem-kv-val" style="max-width:300px;word-break:break-word">${task.description}</span></div>` : ''}
-      </div>
-    ` : ''}
+  `;
 
-    ${task.subtasks.length > 0 ? `
-      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between">
-        <span><span class="i18n-zh">子任務</span><span class="i18n-en">Subtasks</span></span>
-        <div class="subtask-filter" id="subtaskFilter">
-          <button class="subtask-filter-btn active" onclick="filterSubtasks('all',this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
-          <button class="subtask-filter-btn" onclick="filterSubtasks('done',this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
-          <button class="subtask-filter-btn" onclick="filterSubtasks('pending',this)"><span class="i18n-zh">未完成</span><span class="i18n-en">Todo</span></button>
+  if (total > 0) {
+    midContent.innerHTML = `
+      <div style="padding:6px 10px;border-bottom:1px solid var(--border)">
+        <div class="subtask-filter" id="subtaskFilter" style="margin-bottom:0">
+          <button class="subtask-filter-btn active" onclick="filterSubtasks('all',this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span> (${total})</button>
+          <button class="subtask-filter-btn" onclick="filterSubtasks('done',this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span> (${done})</button>
+          <button class="subtask-filter-btn" onclick="filterSubtasks('pending',this)"><span class="i18n-zh">未完成</span><span class="i18n-en">Todo</span> (${total - done})</button>
         </div>
       </div>
-      <div class="subtask-list" id="subtaskList">
+      <div id="subtaskList">
         ${task.subtasks.map((s,si) => `
-          <div class="subtask-item${s.done ? ' done' : ''}" data-subtask-done="${s.done}">
-            <div class="subtask-check${s.done ? ' checked' : ''}">${s.done ? '✓' : ''}</div>
-            <div class="subtask-text${s.done ? ' done-text' : ''}">${s.text}</div>
+          <div class="subtask-row${s.done ? ' done' : ''}" data-subtask-done="${s.done}">
+            <span class="st-icon">${s.done ? '☑' : '☐'}</span>
+            <span class="st-text${s.done ? ' done-text' : ''}">${s.text}</span>
           </div>
         `).join('')}
       </div>
-    ` : '<div style="color:var(--muted);font-size:13px;margin-bottom:16px">No subtasks</div>'}
+    `;
+  } else {
+    midContent.innerHTML = '<div class="panel-empty"><div>📝</div><span class="i18n-zh">此任務無子任務</span><span class="i18n-en">No subtasks</span></div>';
+  }
 
+  // ── Right Panel: Task Info + Progress Timeline ──
+  const rightHeader = document.getElementById('taskRightHeader');
+  const rightContent = document.getElementById('taskRightContent');
+  rightHeader.innerHTML = '<span class="i18n-zh">任務詳情</span><span class="i18n-en">Task Detail</span>';
+
+  const dotColors = ['pt-dot-blue', 'pt-dot-green', 'pt-dot-amber'];
+
+  rightContent.innerHTML = `
+    <div class="task-info-section">
+      <div class="task-info-title">${task.title}</div>
+      <div class="task-info-badges">
+        <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}">${task.priority}</span>
+        <span class="badge badge-cat">${task.category || 'General'}</span>
+        ${statusBadge(task.status)}
+        ${task.isOverdue ? '<span class="badge badge-overdue">🚨 已延誤</span>' : ''}
+      </div>
+      <div class="task-info-grid">
+        ${task.createdDate ? '<span class="tig-key">📅 <span class="i18n-zh">建立日期</span><span class="i18n-en">Created</span></span><span class="tig-val">' + task.createdDate + '</span>' : ''}
+        ${task.dueDate ? '<span class="tig-key">⏰ <span class="i18n-zh">預計完成</span><span class="i18n-en">Due Date</span></span><span class="tig-val">' + task.dueDate + '</span>' : ''}
+        ${task.assignee ? '<span class="tig-key">👤 <span class="i18n-zh">負責人</span><span class="i18n-en">Assignee</span></span><span class="tig-val">' + task.assignee + '</span>' : ''}
+        <span class="tig-key">🏷️ <span class="i18n-zh">狀態</span><span class="i18n-en">Status</span></span><span class="tig-val">${task.status || 'pending'}</span>
+        <span class="tig-key">📊 <span class="i18n-zh">優先級</span><span class="i18n-en">Priority</span></span><span class="tig-val">${task.priority || 'P3'}</span>
+        ${total > 0 ? '<span class="tig-key">📝 <span class="i18n-zh">子任務進度</span><span class="i18n-en">Subtasks</span></span><span class="tig-val">' + done + '/' + total + ' (' + Math.round(done/total*100) + '%)</span>' : ''}
+      </div>
+      ${task.description ? '<div class="task-info-desc">📝 ' + task.description + '</div>' : ''}
+    </div>
     ${related.length > 0 ? `
-      <div class="timeline-section">
-        <h4>
-          <span class="i18n-zh">相關進度記錄</span>
-          <span class="i18n-en">Related Progress</span>
-        </h4>
-        ${related.map(e => `
-          <div class="timeline-entry fade-in">
-            <div class="timeline-dot"></div>
-            <div class="timeline-body">
-              <div class="timeline-date">${e.date}</div>
-              <div class="timeline-title-text">${e.title}</div>
-              ${e.items.length > 0 ? `<div class="timeline-items">${e.items.slice(0,3).map(i => '• ' + i).join('<br>')}</div>` : ''}
+      <div class="progress-timeline">
+        <div class="pt-header"><span class="i18n-zh">相關進度記錄</span><span class="i18n-en">Related Progress</span></div>
+        ${related.map((e, i) => `
+          <div class="pt-entry fade-in" style="animation-delay:${i*0.05}s">
+            <div class="pt-line"></div>
+            <div class="pt-dot ${dotColors[i % dotColors.length]}"></div>
+            <div class="pt-body">
+              <div class="pt-date">${e.date}</div>
+              <div class="pt-title">${e.title}</div>
+              ${e.items.length > 0 ? '<div class="pt-items">' + e.items.slice(0,3).map(it => '• ' + it).join('<br>') + '</div>' : ''}
             </div>
           </div>
         `).join('')}
       </div>
-    ` : ''}
+    ` : '<div style="padding:14px;color:var(--muted);font-size:12px"><span class="i18n-zh">暫無相關進度記錄</span><span class="i18n-en">No related progress entries</span></div>'}
   `;
 }
 
@@ -1527,9 +1690,55 @@ function filterSubtasks(type, btn) {
 let memData = null;
 let selectedLayerKey = null;
 
+function renderMemoryStats(m) {
+  // Count healthy/issue layers
+  const layerKeys = ['l0','l1','l2','l3','l2plus','l4'];
+  let healthy = 0, issues = 0;
+  layerKeys.forEach(k => {
+    const d = m[k];
+    if (d && d.status === 'ok') healthy++;
+    else issues++;
+  });
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('memStatLayers', '6');
+  set('memStatHealthy', healthy);
+  set('memStatIssues', issues);
+  set('memStatContainers', '4');
+
+  // Avg latency from L2+ and L4
+  const l2pMs = m.l2plus?.search_latency_ms ?? -1;
+  const l4Ms = m.l4?.search_latency_ms ?? -1;
+  const latencies = [l2pMs, l4Ms].filter(v => v >= 0);
+  const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a,b)=>a+b,0) / latencies.length) : -1;
+  set('memStatLatency', avgLatency >= 0 ? avgLatency + 'ms' : 'N/A');
+
+  // Color latency card: amber if >500
+  const latCard = document.getElementById('memStatLatency')?.closest('.stat-card');
+  if (latCard && avgLatency > 500) {
+    latCard.className = 'stat-card amber';
+  } else if (latCard && avgLatency >= 0) {
+    latCard.className = 'stat-card green';
+  }
+
+  // Total injection estimate (tokens)
+  const l0Tok = Math.round((m.l0?.size_kb||0) * 0.25);
+  const l1Tok = (m.l1?.summaries||0) * 120;
+  const l2Tok = Math.round((m.l2?.db_size_mb||0) * 2000);
+  const l3Tok = (m.l3?.documents||0) * 15;
+  const l2pTok = 800;
+  const l4Tok = 600;
+  const totalTok = l0Tok + l1Tok + l2Tok + l3Tok + l2pTok + l4Tok;
+  const tokStr = totalTok > 1000 ? Math.round(totalTok/1000) + 'K' : totalTok.toString();
+  set('memStatInjection', tokStr);
+}
+
 function renderMemory(m) {
   memData = m;
   selectedLayerKey = null;
+
+  // Render stats row
+  renderMemoryStats(m);
 
   const layers = [
     { key: 'l0', label: 'L0', name: { zh: 'Markdown 文件', en: 'Markdown Files' } },
