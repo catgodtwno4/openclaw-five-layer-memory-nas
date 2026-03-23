@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Dashboard Server — Session Auth + Rate Limiting + User Management + Data API"""
-import http.server, http.cookies, os, time, json, secrets, urllib.parse, urllib.request, subprocess, threading, re
+import http.server, http.cookies, os, time, json, secrets, urllib.parse, urllib.request, subprocess, threading, re, sqlite3, base64
 from collections import defaultdict
 
 PORT = 8090
@@ -13,6 +13,11 @@ USERS_FILE = os.path.join(SERVE_DIR, "users.json")
 TODO_FILE  = os.path.expanduser("~/.openclaw-data/shared-data/todo.md")
 PROGRESS_FILE = os.path.expanduser("~/.openclaw-data/shared-data/progress-log.md")
 MEMORY_FILE = "/tmp/memory-dashboard-data.json"
+QMD_DB = os.path.expanduser("~/.openclaw/agents/main/qmd/xdg-cache/qmd/index.sqlite")
+
+NEO4J_URL  = "http://10.10.10.66:7474"
+NEO4J_USER = "neo4j"
+NEO4J_PASS = "openclaw2026"
 
 CF_TOKEN_FILE = os.path.expanduser("~/.openclaw/.cf-access-token")
 CF_ACCOUNT_ID = "555d2d49ac6f932b0513cce036e1ab45"
@@ -25,6 +30,9 @@ MAX_FAILS  = 5
 FAIL_WINDOW = 60
 _refreshing = False
 _users_lock = threading.Lock()
+
+# Valid roles
+VALID_ROLES = ("admin", "task_manager", "viewer")
 
 # ── Default users (created on first run) ────────────────────────────────────
 
@@ -224,6 +232,32 @@ def parse_progress(path):
 
     return entries
 
+
+def _neo4j_query(statement):
+    """Execute a Cypher query against Neo4j REST API. Returns rows list or raises."""
+    url = f"{NEO4J_URL}/db/neo4j/tx/commit"
+    payload = json.dumps({"statements": [{"statement": statement}]}).encode("utf-8")
+    creds = base64.b64encode(f"{NEO4J_USER}:{NEO4J_PASS}".encode()).decode()
+    req = urllib.request.Request(url, data=payload, method="POST", headers={
+        "Authorization": f"Basic {creds}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    })
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    errors = data.get("errors", [])
+    if errors:
+        raise RuntimeError(f"Neo4j error: {errors[0].get('message', str(errors[0]))}")
+    results = data.get("results", [])
+    if not results:
+        return []
+    columns = results[0].get("columns", [])
+    rows = []
+    for row in results[0].get("data", []):
+        rows.append(dict(zip(columns, row.get("row", []))))
+    return rows
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
@@ -285,6 +319,16 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             return None
         return sess
 
+    def _require_task_manager_or_admin(self):
+        """Returns session if admin or task_manager, else sends 403 and returns None."""
+        sess = self._require_auth()
+        if not sess:
+            return None
+        if sess.get("role") not in ("admin", "task_manager"):
+            self._send_json(403, {"error": "forbidden", "detail": "admin or task_manager role required"})
+            return None
+        return sess
+
     # ── Routing ───────────────────────────────────────────────────────────────
 
     def do_GET(self):
@@ -306,6 +350,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_memory_files(); return
         if path == "/api/memory/file":
             self._handle_memory_file(); return
+        if path == "/api/qmd/documents":
+            self._handle_qmd_documents(); return
+        if path == "/api/graph/nodes":
+            self._handle_graph_nodes(); return
 
         # Static files — require session
         if not self._get_session():
@@ -323,9 +371,16 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_refresh(); return
         if path == "/api/users":
             self._handle_users_create(); return
+        if path == "/api/tasks":
+            self._handle_tasks_create(); return
         self.send_response(405); self.end_headers()
 
     def do_PUT(self):
+        path = self.path.split("?")[0]
+        # /api/tasks/:index
+        m = re.match(r'^/api/tasks/(\d+)$', path)
+        if m:
+            self._handle_tasks_update(int(m.group(1))); return
         # /api/users/:email
         m = re.match(r'^/api/users/([^/?]+)', self.path)
         if m:
@@ -333,6 +388,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(405); self.end_headers()
 
     def do_DELETE(self):
+        path = self.path.split("?")[0]
+        # /api/tasks/:index
+        m = re.match(r'^/api/tasks/(\d+)$', path)
+        if m:
+            self._handle_tasks_delete(int(m.group(1))); return
+        # /api/users/:email
         m = re.match(r'^/api/users/([^/?]+)', self.path)
         if m:
             self._handle_users_delete(urllib.parse.unquote(m.group(1))); return
@@ -462,6 +523,89 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         except OSError as e:
             self._send_json(500, {"error": str(e)})
 
+    # ── QMD Documents API ─────────────────────────────────────────────────────
+
+    def _handle_qmd_documents(self):
+        """GET /api/qmd/documents — list all QMD indexed documents from SQLite."""
+        if not self._require_auth():
+            return
+        if not os.path.exists(QMD_DB):
+            self._send_json(200, []); return
+        try:
+            conn = sqlite3.connect(QMD_DB, timeout=5)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, collection, path, title, hash, created_at, modified_at, active "
+                "FROM documents ORDER BY modified_at DESC"
+            )
+            rows = cur.fetchall()
+            conn.close()
+            docs = []
+            for r in rows:
+                docs.append({
+                    "id": r["id"],
+                    "path": r["path"],
+                    "title": r["title"],
+                    "collection": r["collection"],
+                    "hash": r["hash"],
+                    "createdAt": r["created_at"],
+                    "modifiedAt": r["modified_at"],
+                    "active": bool(r["active"]),
+                })
+            self._send_json(200, docs)
+        except sqlite3.Error as e:
+            self._send_json(500, {"error": f"SQLite error: {e}"})
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+
+    # ── Graph Data API (Neo4j) ────────────────────────────────────────────────
+
+    def _handle_graph_nodes(self):
+        """GET /api/graph/nodes — get graph summary from Neo4j."""
+        if not self._require_auth():
+            return
+        try:
+            # 1. Node type counts
+            node_rows = _neo4j_query(
+                "MATCH (n) RETURN labels(n)[0] as type, count(n) as cnt ORDER BY cnt DESC"
+            )
+            node_types = [
+                {"type": r.get("type"), "count": r.get("cnt")}
+                for r in node_rows
+            ]
+
+            # 2. Sample memory nodes
+            mem_rows = _neo4j_query(
+                "MATCH (n:Memory) RETURN n.memory as text, n.memory_type as mtype, n.user_id as user LIMIT 20"
+            )
+            memories = [
+                {"text": r.get("text"), "type": r.get("mtype"), "user": r.get("user")}
+                for r in mem_rows
+            ]
+
+            # 3. Relationship summary
+            rel_rows = _neo4j_query(
+                "MATCH (a)-[r]->(b) RETURN labels(a)[0] as from, type(r) as rel, "
+                "labels(b)[0] as to, count(*) as cnt ORDER BY cnt DESC LIMIT 20"
+            )
+            relationships = [
+                {"from": r.get("from"), "rel": r.get("rel"), "to": r.get("to"), "count": r.get("cnt")}
+                for r in rel_rows
+            ]
+
+            self._send_json(200, {
+                "nodeTypes": node_types,
+                "relationships": relationships,
+                "memories": memories,
+            })
+        except urllib.error.URLError as e:
+            self._send_json(503, {"error": f"Neo4j unreachable: {e}"})
+        except RuntimeError as e:
+            self._send_json(502, {"error": str(e)})
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+
     # ── User Management API ───────────────────────────────────────────────────
 
     def _handle_users_list(self):
@@ -484,8 +628,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(400, {"error": "email is required"}); return
         if not _validate_email(email):
             self._send_json(400, {"error": "invalid email format"}); return
-        if role not in ("admin", "viewer"):
-            self._send_json(400, {"error": "role must be admin or viewer"}); return
+        if role not in VALID_ROLES:
+            self._send_json(400, {"error": f"role must be one of: {', '.join(VALID_ROLES)}"}); return
 
         with _users_lock:
             users = _load_users()
@@ -517,8 +661,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             if not user:
                 self._send_json(404, {"error": "user not found"}); return
             if "role" in body:
-                if body["role"] not in ("admin", "viewer"):
-                    self._send_json(400, {"error": "role must be admin or viewer"}); return
+                if body["role"] not in VALID_ROLES:
+                    self._send_json(400, {"error": f"role must be one of: {', '.join(VALID_ROLES)}"}); return
                 user["role"] = body["role"]
             _save_users(users)
             # Refresh in-memory sessions for this user
@@ -552,6 +696,217 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # Sync CF Access policy in background
         _cf_sync_async(all_emails)
         self._send_json(200, {"deleted": email})
+
+    # ── Task Management API ───────────────────────────────────────────────────
+
+    def _handle_tasks_create(self):
+        """POST /api/tasks — create a new main task in todo.md (admin or task_manager)."""
+        if not self._require_task_manager_or_admin():
+            return
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        title    = (body.get("title") or "").strip()
+        priority = (body.get("priority") or "P2").strip().upper()
+        category = (body.get("category") or "待處理").strip()
+        subtasks = body.get("subtasks") or []
+
+        if not title:
+            self._send_json(400, {"error": "title is required"}); return
+        if priority not in ("P1", "P2", "P3"):
+            self._send_json(400, {"error": "priority must be P1, P2, or P3"}); return
+        if not isinstance(subtasks, list):
+            self._send_json(400, {"error": "subtasks must be an array"}); return
+
+        # Build the new task block
+        task_lines = [f"\n### [{priority}] {title}"]
+        for st in subtasks:
+            st = str(st).strip()
+            if st:
+                task_lines.append(f"- [ ] {st}")
+        task_block = "\n".join(task_lines) + "\n"
+
+        try:
+            # Read existing todo.md or start empty
+            if os.path.exists(TODO_FILE):
+                with open(TODO_FILE, encoding="utf-8") as f:
+                    content = f.read()
+            else:
+                content = ""
+
+            # Find the ## category section
+            section_pattern = re.compile(
+                r'^(##\s+' + re.escape(category) + r'\s*)$',
+                re.MULTILINE
+            )
+            match = section_pattern.search(content)
+
+            if match:
+                # Insert task block right after the ## section header line
+                insert_pos = match.end()
+                content = content[:insert_pos] + task_block + content[insert_pos:]
+            else:
+                # Category not found — append a new section at end
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += f"\n## {category}\n{task_block}"
+
+            os.makedirs(os.path.dirname(TODO_FILE), exist_ok=True)
+            with open(TODO_FILE, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            self._send_json(201, {
+                "created": True,
+                "title": title,
+                "priority": priority,
+                "category": category,
+                "subtasks": subtasks,
+            })
+        except OSError as e:
+            self._send_json(500, {"error": f"File error: {e}"})
+
+    def _handle_tasks_delete(self, task_index):
+        """DELETE /api/tasks/:index — remove a task from todo.md (admin only)."""
+        if not self._require_admin():
+            return
+        try:
+            tasks = parse_todo(TODO_FILE)
+            if task_index < 0 or task_index >= len(tasks):
+                self._send_json(404, {"error": f"task index {task_index} not found"}); return
+
+            target = tasks[task_index]
+            target_title    = target["title"]
+            target_priority = target["priority"]
+
+            # Read raw file
+            with open(TODO_FILE, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Find and remove the task block (### header + subtasks)
+            new_lines = []
+            in_target = False
+            removed = False
+
+            for line in lines:
+                stripped = line.rstrip("\n")
+                h3 = re.match(r'^###\s+(\[P(\d)\])?\s*(.*?)(\s*\(AUTO\))?\s*$', stripped)
+                if h3:
+                    priority_str = f"P{h3.group(2)}" if h3.group(2) else "P0"
+                    t_title = h3.group(3).strip()
+                    if not removed and priority_str == target_priority and t_title == target_title:
+                        in_target = True
+                        removed = True
+                        continue
+                    else:
+                        in_target = False
+
+                if in_target:
+                    # Skip subtask lines belonging to this task
+                    sub_done = re.match(r'^\s*-\s+\[x\]\s+', stripped, re.IGNORECASE)
+                    sub_todo = re.match(r'^\s*-\s+\[ \]\s+', stripped)
+                    if sub_done or sub_todo:
+                        continue
+                    else:
+                        # Non-subtask line — stop skipping
+                        in_target = False
+
+                new_lines.append(line)
+
+            with open(TODO_FILE, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+            self._send_json(200, {"deleted": True, "index": task_index, "title": target_title})
+        except FileNotFoundError:
+            self._send_json(404, {"error": "todo.md not found"})
+        except OSError as e:
+            self._send_json(500, {"error": f"File error: {e}"})
+
+    def _handle_tasks_update(self, task_index):
+        """PUT /api/tasks/:index — toggle subtask completion (admin or task_manager)."""
+        if not self._require_task_manager_or_admin():
+            return
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        subtask_index = body.get("subtaskIndex")
+        done = body.get("done")
+
+        if subtask_index is None or done is None:
+            self._send_json(400, {"error": "subtaskIndex and done are required"}); return
+        if not isinstance(subtask_index, int) or subtask_index < 0:
+            self._send_json(400, {"error": "subtaskIndex must be a non-negative integer"}); return
+
+        try:
+            tasks = parse_todo(TODO_FILE)
+            if task_index < 0 or task_index >= len(tasks):
+                self._send_json(404, {"error": f"task index {task_index} not found"}); return
+
+            target = tasks[task_index]
+            if subtask_index >= len(target["subtasks"]):
+                self._send_json(404, {"error": f"subtask index {subtask_index} not found"}); return
+
+            target_title    = target["title"]
+            target_priority = target["priority"]
+            target_subtask  = target["subtasks"][subtask_index]["text"]
+
+            # Read raw file
+            with open(TODO_FILE, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            new_lines = []
+            in_target_task  = False
+            task_found      = False
+            subtask_counter = 0
+            updated         = False
+
+            for line in lines:
+                stripped = line.rstrip("\n")
+                h3 = re.match(r'^###\s+(\[P(\d)\])?\s*(.*?)(\s*\(AUTO\))?\s*$', stripped)
+                if h3:
+                    priority_str = f"P{h3.group(2)}" if h3.group(2) else "P0"
+                    t_title = h3.group(3).strip()
+                    if not task_found and priority_str == target_priority and t_title == target_title:
+                        in_target_task = True
+                        task_found = True
+                        subtask_counter = 0
+                    else:
+                        in_target_task = False
+
+                if in_target_task and not updated:
+                    sub_done = re.match(r'^(\s*-\s+\[)[xX](\]\s+.+)$', stripped)
+                    sub_todo = re.match(r'^(\s*-\s+\[) (\]\s+.+)$', stripped)
+                    if sub_done or sub_todo:
+                        if subtask_counter == subtask_index:
+                            # Toggle this line
+                            if done:
+                                new_line = re.sub(r'^(\s*-\s+\[)[ ](\])', r'\1x\2', line, flags=re.IGNORECASE)
+                                if new_line == line:
+                                    new_line = re.sub(r'^(\s*-\s+\[)[xX](\])', r'\1x\2', line)
+                            else:
+                                new_line = re.sub(r'^(\s*-\s+\[)[xX](\])', r'\1 \2', line, flags=re.IGNORECASE)
+                            new_lines.append(new_line)
+                            updated = True
+                            subtask_counter += 1
+                            continue
+                        subtask_counter += 1
+
+                new_lines.append(line)
+
+            with open(TODO_FILE, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+            self._send_json(200, {
+                "updated": updated,
+                "taskIndex": task_index,
+                "subtaskIndex": subtask_index,
+                "done": done,
+            })
+        except FileNotFoundError:
+            self._send_json(404, {"error": "todo.md not found"})
+        except OSError as e:
+            self._send_json(500, {"error": f"File error: {e}"})
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -857,9 +857,63 @@ html = r"""<!DOCTYPE html>
   </div>
 </nav>
 
+<!-- Task Creation Modal -->
+<div class="modal-overlay" id="newTaskModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">
+      <span class="i18n-zh">➕ 新增任務</span>
+      <span class="i18n-en">➕ New Task</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">標題</span><span class="i18n-en">Title</span></label>
+      <input class="form-input" id="newTaskTitle" type="text" placeholder="Task title..." autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">優先級</span><span class="i18n-en">Priority</span></label>
+      <select class="form-select" id="newTaskPriority">
+        <option value="P1">P1 — 緊急 / Urgent</option>
+        <option value="P2" selected>P2 — 一般 / Normal</option>
+        <option value="P3">P3 — 低優先 / Low</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">分類</span><span class="i18n-en">Category</span></label>
+      <select class="form-select" id="newTaskCategory">
+        <option value="進行中">進行中 (In Progress)</option>
+        <option value="待處理" selected>待處理 (Pending)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">
+        <span class="i18n-zh">子任務（每行一項）</span>
+        <span class="i18n-en">Subtasks (one per line)</span>
+      </label>
+      <textarea class="form-input" id="newTaskSubtasks" rows="4" placeholder="- Subtask 1&#10;- Subtask 2" style="resize:vertical;font-family:inherit"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeNewTaskModal()">
+        <span class="i18n-zh">取消</span><span class="i18n-en">Cancel</span>
+      </button>
+      <button class="btn-primary" onclick="submitNewTask()">
+        <span class="i18n-zh">建立任務</span><span class="i18n-en">Create Task</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Tab: Tasks -->
 <div class="tab-content active" id="tab-tasks">
   <div class="page">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px" id="tasksHeader">
+      <div style="font-size:15px;font-weight:700">
+        <span class="i18n-zh">📋 任務清單</span>
+        <span class="i18n-en">📋 Task List</span>
+      </div>
+      <button class="btn-primary" id="newTaskBtn" onclick="openNewTaskModal()" style="display:none">
+        <span class="i18n-zh">➕ 新增任務</span>
+        <span class="i18n-en">➕ New Task</span>
+      </button>
+    </div>
     <div class="tasks-layout">
       <div class="task-list-panel" id="taskList">
         <!-- Task cards injected here -->
@@ -960,10 +1014,12 @@ html = r"""<!DOCTYPE html>
     </div>
     <div class="form-group">
       <label class="form-label"><span class="i18n-zh">角色</span><span class="i18n-en">Role</span></label>
-      <select class="form-select" id="newRole">
-        <option value="admin">Admin</option>
-        <option value="viewer">Viewer</option>
+      <select class="form-select" id="newRole" onchange="updateRoleDesc(this.value)">
+        <option value="admin">admin — Full access (manage users, tasks, view all)</option>
+        <option value="task_manager">task_manager — Manage tasks + view memory</option>
+        <option value="viewer" selected>viewer — Read-only</option>
       </select>
+      <div id="roleDescBox" style="margin-top:6px;font-size:11px;color:#a5b4fc;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:6px;padding:6px 10px;line-height:1.5;display:none"></div>
     </div>
     <div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;padding:10px 12px;font-size:11px;color:#a5b4fc;margin-bottom:4px;line-height:1.5;">
       🔒 <span class="i18n-zh">使用者將透過 Cloudflare Access 電子郵件驗證登入</span><span class="i18n-en">User will login via Cloudflare Access email verification</span>
@@ -990,8 +1046,9 @@ html = r"""<!DOCTYPE html>
     <div class="form-group">
       <label class="form-label"><span class="i18n-zh">角色</span><span class="i18n-en">Role</span></label>
       <select class="form-select" id="editRoleSelect">
-        <option value="admin">Admin</option>
-        <option value="viewer">Viewer</option>
+        <option value="admin">admin — Full access (manage users, tasks, view all)</option>
+        <option value="task_manager">task_manager — Manage tasks + view memory</option>
+        <option value="viewer">viewer — Read-only</option>
       </select>
     </div>
     <div class="modal-actions">
@@ -1081,7 +1138,11 @@ function renderAll() {
 
   if (isAdmin) {
     document.getElementById('usersTabBtn').style.display = '';
+    document.getElementById('newTaskBtn').style.display = '';
   }
+  // Show newTaskBtn for task_manager too (if detected from user data)
+  const myUser = (appData.users || []).find(u => u.role === 'task_manager');
+  if (myUser) document.getElementById('newTaskBtn').style.display = '';
 }
 
 // ─── Tasks ───
@@ -1332,12 +1393,30 @@ function renderMemMid(key) {
   } else if (key === 'l3') {
     hdrEl.innerHTML = '<span class="i18n-zh">QMD 文件</span><span class="i18n-en">QMD Documents</span>';
     const d = m.l3 || {};
-    const el0 = mkItem('📚', d.documents + ' Documents', d.engine, 0);
-    el0.onclick = () => selectMid(0, el0, () => renderDetailKV('QMD BM25', [
-      { k: 'Documents', v: d.documents },
-      { k: 'Engine', v: d.engine },
-      { k: 'Status', v: d.status },
-    ]));
+    midEl.innerHTML = '<div class="mem-panel-empty"><div>⏳</div><span>Loading documents...</span></div>';
+    const fallbackL3 = () => {
+      midEl.innerHTML = '';
+      const el0 = mkItem('📚', (d.documents || 0) + ' Documents', d.engine || 'BM25', 0);
+      el0.onclick = () => selectMid(0, el0, () => renderDetailKV('QMD BM25', [
+        { k: 'Documents', v: d.documents },
+        { k: 'Engine', v: d.engine },
+        { k: 'Status', v: d.status },
+      ]));
+    };
+    fetch('/api/qmd/documents')
+      .then(r => r.ok ? r.json() : null)
+      .then(docs => {
+        midEl.innerHTML = '';
+        if (!docs || !Array.isArray(docs) || !docs.length) { fallbackL3(); return; }
+        docs.forEach((doc, i) => {
+          const title = doc.title || doc.filename || doc.id || ('Document ' + (i + 1));
+          const collection = doc.collection || doc.namespace || '—';
+          const date = (doc.date || doc.created_at || '').slice(0, 10);
+          const el = mkItem('📄', title, collection + (date ? ' · ' + date : ''), i);
+          el.onclick = () => selectMid(i, el, () => renderDetailQMDDoc(doc));
+        });
+      })
+      .catch(() => fallbackL3());
 
   } else if (key === 'l2plus') {
     hdrEl.innerHTML = '<span class="i18n-zh">MemOS 服務</span><span class="i18n-en">MemOS Services</span>';
@@ -1347,6 +1426,7 @@ function renderMemMid(key) {
       { icon: '🕸', name: 'Neo4j Graph DB', meta: d.neo4j || '—' },
       { icon: '📐', name: 'Qdrant Vector DB', meta: d.qdrant || '—' },
       { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
+      { icon: '🫧', name: 'Knowledge Graph', meta: 'View graph' },
     ];
     items.forEach((it, i) => {
       const el = mkItem(it.icon, it.name, it.meta, i);
@@ -1360,6 +1440,7 @@ function renderMemMid(key) {
       { icon: '🌐', name: 'API Endpoint', meta: d.status === 'ok' ? '✓ OK' : '✗ Error' },
       { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
       { icon: '🤖', name: 'LLM Model', meta: shortModel(d.llm_model) },
+      { icon: '🫧', name: 'Knowledge Graph', meta: 'View graph' },
     ];
     items.forEach((it, i) => {
       const el = mkItem(it.icon, it.name, it.meta, i);
@@ -1433,8 +1514,68 @@ function latencyBlock(ms) {
     </div>`;
 }
 
+function renderDetailQMDDoc(doc) {
+  const path = doc.path || doc.file_path || '';
+  const right = document.getElementById('memRightContent');
+  right.innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">📄 ${doc.title || doc.filename || 'Document'}</div>
+      <div class="mem-detail-meta">${path}</div>
+      <div class="mem-kv-list">
+        ${doc.collection ? `<div class="mem-kv-row"><span class="mem-kv-key">Collection</span><span class="mem-kv-val">${doc.collection}</span></div>` : ''}
+        ${doc.namespace ? `<div class="mem-kv-row"><span class="mem-kv-key">Namespace</span><span class="mem-kv-val">${doc.namespace}</span></div>` : ''}
+        ${doc.date || doc.created_at ? `<div class="mem-kv-row"><span class="mem-kv-key">Date</span><span class="mem-kv-val">${(doc.date || doc.created_at || '').slice(0, 10)}</span></div>` : ''}
+        ${doc.size ? `<div class="mem-kv-row"><span class="mem-kv-key">Size</span><span class="mem-kv-val">${doc.size}</span></div>` : ''}
+        ${doc.id ? `<div class="mem-kv-row"><span class="mem-kv-key">ID</span><span class="mem-kv-val" style="font-size:11px;font-family:monospace">${doc.id}</span></div>` : ''}
+        ${doc.score !== undefined ? `<div class="mem-kv-row"><span class="mem-kv-key">Score</span><span class="mem-kv-val">${doc.score}</span></div>` : ''}
+      </div>
+      ${doc.content || doc.text || doc.summary ? `
+        <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">Preview</div>
+        <div class="mem-detail-preview">${(doc.content || doc.text || doc.summary || '').slice(0, 600)}</div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function buildGraphSVG(nodes) {
+  // Build a bubble chart from node type summary
+  const typeMap = {};
+  nodes.forEach(n => {
+    const t = n.type || n.node_type || 'Unknown';
+    typeMap[t] = (typeMap[t] || 0) + 1;
+  });
+  const types = Object.entries(typeMap).sort((a, b) => b[1] - a[1]);
+  const total = types.reduce((s, [, c]) => s + c, 0);
+  const colors = { Memory: '#3b82f6', Property: '#22c55e', Entity: '#f59e0b', Relationship: '#a855f7', Unknown: '#64748b' };
+  const W = 320, H = 220, CX = W / 2, CY = H / 2;
+  const maxR = 55, minR = 18;
+  const maxCount = types[0]?.[1] || 1;
+
+  // Arrange in a circle
+  const circleItems = types.map(([type, count], i) => {
+    const angle = (i / types.length) * 2 * Math.PI - Math.PI / 2;
+    const r = Math.max(minR, Math.round(maxR * Math.sqrt(count / maxCount)));
+    const dist = types.length === 1 ? 0 : Math.min(80, 30 + r);
+    const x = Math.round(CX + dist * Math.cos(angle));
+    const y = Math.round(CY + dist * Math.sin(angle));
+    const color = colors[type] || '#6366f1';
+    return { type, count, x, y, r, color };
+  });
+
+  const circles = circleItems.map(c =>
+    `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${c.color}" fill-opacity="0.25" stroke="${c.color}" stroke-width="1.5">
+      <title>${c.type}: ${c.count} nodes</title>
+    </circle>
+    <text x="${c.x}" y="${c.y - 4}" text-anchor="middle" fill="${c.color}" font-size="10" font-weight="600">${c.type}</text>
+    <text x="${c.x}" y="${c.y + 10}" text-anchor="middle" fill="${c.color}" font-size="9" opacity="0.8">${c.count}</text>`
+  ).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:220px;display:block">${circles}</svg>`;
+}
+
 function renderDetailL2plus(d) {
-  document.getElementById('memRightContent').innerHTML = `
+  const right = document.getElementById('memRightContent');
+  right.innerHTML = `
     <div class="mem-detail-content fade-in">
       <div class="mem-detail-title">MemOS L2+</div>
       <div class="mem-detail-meta">${d.api || ''}</div>
@@ -1446,12 +1587,18 @@ function renderDetailL2plus(d) {
         <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
       </div>
       ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
+      <div id="l2plusGraphSection" style="margin-top:16px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Knowledge Graph</div>
+        <div id="l2plusGraphLoading" style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading graph...</div>
+      </div>
     </div>
   `;
+  loadGraphSection('l2plusGraphLoading', 'l2plusGraphSection');
 }
 
 function renderDetailL4(d) {
-  document.getElementById('memRightContent').innerHTML = `
+  const right = document.getElementById('memRightContent');
+  right.innerHTML = `
     <div class="mem-detail-content fade-in">
       <div class="mem-detail-title">Cognee L4</div>
       <div class="mem-detail-meta">${d.api || ''}</div>
@@ -1462,8 +1609,98 @@ function renderDetailL4(d) {
         <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
       </div>
       ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
+      <div id="l4GraphSection" style="margin-top:16px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Knowledge Graph</div>
+        <div id="l4GraphLoading" style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading graph...</div>
+      </div>
     </div>
   `;
+  loadGraphSection('l4GraphLoading', 'l4GraphSection');
+}
+
+function loadGraphSection(loadingId, sectionId) {
+  fetch('/api/graph/nodes')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const loadingEl = document.getElementById(loadingId);
+      const sectionEl = document.getElementById(sectionId);
+      if (!loadingEl || !sectionEl) return;
+      const nodes = Array.isArray(data) ? data : (data?.nodes || data?.data || []);
+      if (!nodes.length) {
+        loadingEl.textContent = 'No graph data available';
+        return;
+      }
+      // Type summary
+      const typeMap = {};
+      const relMap = {};
+      nodes.forEach(n => {
+        const t = n.type || n.node_type || 'Unknown';
+        typeMap[t] = (typeMap[t] || 0) + 1;
+        (n.relationships || n.edges || []).forEach(rel => {
+          const key = `${t} --[${rel.type || rel.rel_type || 'REL'}]--> ${rel.target_type || '?'}`;
+          relMap[key] = (relMap[key] || 0) + 1;
+        });
+      });
+      const typeSummary = Object.entries(typeMap).map(([t, c]) => `<span class="badge badge-layer" style="margin-right:4px;margin-bottom:4px">${t}: ${c}</span>`).join('');
+      const relSummary = Object.entries(relMap).slice(0, 5).map(([r, c]) => `<div style="font-size:11px;color:var(--muted);padding:2px 0">${r}: ${c}</div>`).join('');
+      // Sample memories
+      const samples = nodes.filter(n => (n.type || n.node_type || '') === 'Memory').slice(0, 5);
+      const sampleHTML = samples.length ? `
+        <div style="font-size:11px;color:var(--muted);margin-top:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Sample Memories</div>
+        ${samples.map(n => `
+          <div class="mem-mid-item" style="cursor:pointer;border-radius:8px;margin-bottom:4px" onclick="showMemoryNodeDetail(${JSON.stringify(n).replace(/"/g, '&quot;')})">
+            <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(n.text || n.content || n.id || '').slice(0, 80)}</span>
+            <span class="badge badge-layer" style="font-size:10px;flex-shrink:0">${n.type || 'Memory'}</span>
+          </div>
+        `).join('')}
+      ` : '';
+
+      loadingEl.outerHTML = `
+        <div>
+          <div style="margin-bottom:8px">${typeSummary}</div>
+          ${relSummary ? `<div style="margin-bottom:8px">${relSummary}</div>` : ''}
+          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">
+            ${buildGraphSVG(nodes)}
+          </div>
+          ${sampleHTML}
+        </div>
+      `;
+    })
+    .catch(() => {
+      const el = document.getElementById(loadingId);
+      if (el) el.textContent = 'Graph not available';
+    });
+}
+
+function showMemoryNodeDetail(node) {
+  const right = document.getElementById('memRightContent');
+  if (!right) return;
+  // Replace content with memory detail
+  const oldContent = right.innerHTML;
+  // Insert a floating detail overlay within right panel
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:absolute;inset:0;background:var(--surface);overflow-y:auto;z-index:5;border-radius:var(--radius)';
+  overlay.innerHTML = `
+    <div class="mem-detail-content fade-in" style="position:relative">
+      <button onclick="this.closest('[style*=position]').remove()" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px">✕</button>
+      <div class="mem-detail-title" style="padding-right:24px">${(node.text || node.content || 'Memory Node').slice(0, 60)}</div>
+      <div style="margin-bottom:10px">
+        <span class="badge badge-layer">${node.type || node.node_type || 'Memory'}</span>
+      </div>
+      <div class="mem-kv-list">
+        ${node.user_id ? `<div class="mem-kv-row"><span class="mem-kv-key">User ID</span><span class="mem-kv-val">${node.user_id}</span></div>` : ''}
+        ${node.id ? `<div class="mem-kv-row"><span class="mem-kv-key">Node ID</span><span class="mem-kv-val" style="font-size:11px;font-family:monospace">${node.id}</span></div>` : ''}
+        ${node.created_at ? `<div class="mem-kv-row"><span class="mem-kv-key">Created</span><span class="mem-kv-val">${node.created_at.slice(0,10)}</span></div>` : ''}
+        ${node.score !== undefined ? `<div class="mem-kv-row"><span class="mem-kv-key">Score</span><span class="mem-kv-val">${node.score}</span></div>` : ''}
+      </div>
+      ${node.text || node.content ? `
+        <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">Full Text</div>
+        <div class="mem-detail-preview">${(node.text || node.content || '')}</div>
+      ` : ''}
+    </div>
+  `;
+  right.style.position = 'relative';
+  right.appendChild(overlay);
 }
 
 function renderDetailSystem(m) {
@@ -1507,6 +1744,91 @@ function shortModel(m) {
   return m.replace('MiniMax-M2.7-highspeed', 'M2.7-HS').replace('openai/', '').replace('anthropic/', '');
 }
 
+// ─── Role description ───
+const roleDescriptions = {
+  admin: '👑 Full access: manage users, tasks, and view all memory layers.',
+  task_manager: '🛠 Manage tasks + view memory layers. Cannot manage users.',
+  viewer: '👁 Read-only access to tasks and dashboard.',
+};
+
+function updateRoleDesc(role) {
+  const box = document.getElementById('roleDescBox');
+  if (!box) return;
+  const desc = roleDescriptions[role] || '';
+  if (desc) { box.textContent = desc; box.style.display = ''; }
+  else { box.style.display = 'none'; }
+}
+
+// ─── New Task Modal ───
+function openNewTaskModal() {
+  document.getElementById('newTaskTitle').value = '';
+  document.getElementById('newTaskPriority').value = 'P2';
+  document.getElementById('newTaskCategory').value = '待處理';
+  document.getElementById('newTaskSubtasks').value = '';
+  document.getElementById('newTaskModal').classList.add('open');
+  setTimeout(() => document.getElementById('newTaskTitle').focus(), 100);
+}
+
+function closeNewTaskModal() {
+  document.getElementById('newTaskModal').classList.remove('open');
+}
+
+function submitNewTask() {
+  const title = document.getElementById('newTaskTitle').value.trim();
+  const priority = document.getElementById('newTaskPriority').value;
+  const category = document.getElementById('newTaskCategory').value;
+  const subtasksRaw = document.getElementById('newTaskSubtasks').value;
+
+  if (!title) {
+    document.getElementById('newTaskTitle').style.borderColor = 'var(--rose)';
+    setTimeout(() => { document.getElementById('newTaskTitle').style.borderColor = ''; }, 2000);
+    return;
+  }
+
+  const subtasks = subtasksRaw.split('\n')
+    .map(s => s.trim().replace(/^[-*]\s*/, ''))
+    .filter(Boolean)
+    .map(text => ({ text, done: false }));
+
+  const payload = { title, priority, category, subtasks };
+
+  fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(r => {
+    if (r.ok) {
+      closeNewTaskModal();
+      loadData();
+    } else {
+      // If API not available, add locally
+      addTaskLocally(payload);
+    }
+  })
+  .catch(() => addTaskLocally(payload));
+}
+
+function addTaskLocally(payload) {
+  if (!appData) appData = { tasks: [], progress: [], users: [] };
+  if (!appData.tasks) appData.tasks = [];
+  const statusMap = { '進行中': 'in_progress', '待處理': 'pending' };
+  appData.tasks.unshift({
+    id: Date.now(),
+    title: payload.title,
+    priority: payload.priority,
+    status: statusMap[payload.category] || 'pending',
+    category: payload.category,
+    subtasks: payload.subtasks,
+  });
+  closeNewTaskModal();
+  renderTasks(appData.tasks, appData.progress || []);
+}
+
+document.getElementById('newTaskModal').addEventListener('click', function(e) {
+  if (e.target === this) closeNewTaskModal();
+});
+
 // ─── Users (Cloudflare Access email-based) ───
 let editingUserEmail = null;
 
@@ -1522,10 +1844,16 @@ function renderUsers(users) {
   const tbody = document.getElementById('usersTableBody');
   tbody.innerHTML = '';
   users.forEach((u, idx) => {
+    const roleBadgeCls = u.role === 'admin' ? 'badge-p1' : u.role === 'task_manager' ? 'badge-warn' : 'badge-p3';
+    const roleLabel = u.role || 'viewer';
+    const roleDesc = roleDescriptions[u.role] || '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><b>${u.email}</b></td>
-      <td><span class="badge ${u.role === 'admin' ? 'badge-p1' : 'badge-p3'}">${u.role}</span></td>
+      <td>
+        <span class="badge ${roleBadgeCls}">${roleLabel}</span>
+        ${roleDesc ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;max-width:200px">${roleDesc}</div>` : ''}
+      </td>
       <td style="color:var(--muted)">${u.createdAt || '—'}</td>
       <td>
         <button class="btn-sm" onclick="openEditRole('${u.email}', '${u.role}')">
