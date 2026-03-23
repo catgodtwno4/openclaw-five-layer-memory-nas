@@ -553,7 +553,29 @@ html = r"""<!DOCTYPE html>
   .progress-blue { background: var(--blue); }
   .progress-amber { background: var(--amber); }
 
-  /* ── Three-Panel Layout (Tasks + Memory) ── */
+  /* ── Tasks Layout ── */
+  .tasks-layout { display: flex; flex-direction: column; gap: 12px; }
+  .tasks-stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .tasks-panels {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 500px;
+    height: calc(100vh - 300px);
+  }
+  .tasks-panels > div {
+    flex: 1;
+    background: var(--bg);
+    overflow-y: auto;
+  }
+
+  /* ── Three-Panel Layout (Memory) ── */
   .three-panel {
     display: flex;
     gap: 0;
@@ -591,7 +613,7 @@ html = r"""<!DOCTYPE html>
     border-bottom: 1px solid var(--border);
     font-weight: 600;
     position: sticky; top: 0;
-    background: var(--surface);
+    background: var(--bg);
     z-index: 2;
   }
   .panel-empty {
@@ -602,22 +624,16 @@ html = r"""<!DOCTYPE html>
   }
   .panel-empty div { font-size: 28px; }
 
-  /* ── Compact Stats (inside left panel) ── */
-  .stats-compact {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-  }
+  /* ── Compact Stats ── */
   .stat-mini {
     text-align: center;
-    padding: 4px 2px;
-    border-radius: 6px;
-    background: rgba(255,255,255,.02);
+    padding: 10px 4px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
   }
-  .stat-mini-num { font-size: 16px; font-weight: 800; line-height: 1.2; }
-  .stat-mini-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .stat-mini-num { font-size: 20px; font-weight: 800; line-height: 1.2; }
+  .stat-mini-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-top: 2px; }
   .stat-mini.green .stat-mini-num { color: var(--green); }
   .stat-mini.blue .stat-mini-num { color: var(--blue); }
   .stat-mini.amber .stat-mini-num { color: var(--amber); }
@@ -1032,6 +1048,19 @@ html = r"""<!DOCTYPE html>
   .badge-overdue   { background: rgba(244,63,94,.15); color: #fb7185; border: 1px solid rgba(244,63,94,.3); font-size:10px; padding:1px 7px; border-radius:4px; font-weight:600; }
   .badge-assignee  { background: rgba(99,102,241,.12); color: #a5b4fc; border: 1px solid rgba(99,102,241,.25); font-size:10px; padding:1px 7px; border-radius:4px; }
 
+  /* ── Right Panel Sections ── */
+  .right-section {
+    border-bottom: 1px solid var(--border);
+  }
+  .right-section-title {
+    padding: 8px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    background: rgba(255,255,255,.02);
+    border-bottom: 1px solid var(--border);
+  }
+
   /* ── Subtask Filter ── */
   .subtask-filter { display: flex; gap: 6px; margin-bottom: 10px; }
   .subtask-filter-btn { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; transition: all .15s; }
@@ -1057,6 +1086,14 @@ html = r"""<!DOCTYPE html>
       border-bottom: 1px solid var(--border);
       max-height: 50vh;
     }
+    .tasks-panels {
+      flex-direction: column;
+      height: auto;
+    }
+    .tasks-panels > div {
+      max-height: 50vh;
+    }
+    .tasks-stats-row { grid-template-columns: repeat(3, 1fr); }
     .memory-panels {
       flex-direction: column;
       height: auto;
@@ -1068,7 +1105,6 @@ html = r"""<!DOCTYPE html>
     }
     .mem-right-panel { min-height: 300px; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
-    .stats-compact { grid-template-columns: repeat(3, 1fr); }
     .nav-time { display: none; }
   }
   @media (max-width: 480px) {
@@ -1170,8 +1206,8 @@ html = r"""<!DOCTYPE html>
 
 <!-- Tab: Tasks -->
 <div class="tab-content active" id="tab-tasks">
-  <div class="page">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px" id="tasksHeader">
+  <div class="page tasks-layout">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px" id="tasksHeader">
       <div style="font-size:15px;font-weight:700">
         <span class="i18n-zh">📋 任務清單</span>
         <span class="i18n-en">📋 Task List</span>
@@ -1182,35 +1218,40 @@ html = r"""<!DOCTYPE html>
       </button>
     </div>
 
-    <!-- Three-Panel Tasks Layout -->
-    <div class="three-panel" id="tasksThreePanel">
-      <!-- Left Panel: Stats + Filter + Task List -->
-      <div class="panel-left">
-        <div class="stats-compact" id="statsCompact">
-          <div class="stat-mini"><div class="stat-mini-num" id="statTotal">—</div><div class="stat-mini-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
-          <div class="stat-mini green"><div class="stat-mini-num" id="statDone">—</div><div class="stat-mini-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
-          <div class="stat-mini blue"><div class="stat-mini-num" id="statInProgress">—</div><div class="stat-mini-label"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></div></div>
-          <div class="stat-mini amber"><div class="stat-mini-num" id="statPending">—</div><div class="stat-mini-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
-          <div class="stat-mini rose"><div class="stat-mini-num" id="statBlocked">—</div><div class="stat-mini-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
-          <div class="stat-mini purple"><div class="stat-mini-num" id="statRate">—</div><div class="stat-mini-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
+    <!-- Stats Summary (full width, above panels) -->
+    <div class="tasks-stats-row" id="statsCompact">
+      <div class="stat-mini"><div class="stat-mini-num" id="statTotal">—</div><div class="stat-mini-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
+      <div class="stat-mini green"><div class="stat-mini-num" id="statDone">—</div><div class="stat-mini-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
+      <div class="stat-mini blue"><div class="stat-mini-num" id="statInProgress">—</div><div class="stat-mini-label"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></div></div>
+      <div class="stat-mini amber"><div class="stat-mini-num" id="statPending">—</div><div class="stat-mini-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
+      <div class="stat-mini rose"><div class="stat-mini-num" id="statBlocked">—</div><div class="stat-mini-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
+      <div class="stat-mini purple"><div class="stat-mini-num" id="statRate">—</div><div class="stat-mini-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
+    </div>
+
+    <!-- Filter Bar (full width, above panels) -->
+    <div class="filter-bar" id="filterBar">
+      <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
+      <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
+      <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
+      <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Todo</span></button>
+      <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">已延誤</span><span class="i18n-en">Late</span></button>
+      <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Block</span></button>
+    </div>
+
+    <!-- Three Equal Panels -->
+    <div class="tasks-panels" id="tasksThreePanel">
+      <!-- Left Panel: Main Task List -->
+      <div>
+        <div class="panel-header">
+          <span class="i18n-zh">主任務</span><span class="i18n-en">Tasks</span>
         </div>
-        <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
-          <div class="filter-bar" id="filterBar" style="margin-bottom:0">
-            <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
-            <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
-            <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">完成</span><span class="i18n-en">Done</span></button>
-            <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Todo</span></button>
-            <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">延誤</span><span class="i18n-en">Late</span></button>
-            <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Block</span></button>
-          </div>
-        </div>
-        <div id="taskList" style="overflow-y:auto">
+        <div id="taskList">
           <!-- Compact task cards injected here -->
         </div>
       </div>
 
       <!-- Middle Panel: Subtask List -->
-      <div class="panel-mid">
+      <div>
         <div class="panel-header" id="taskMidHeader">
           <span class="i18n-zh">子任務</span><span class="i18n-en">Subtasks</span>
         </div>
@@ -1219,8 +1260,8 @@ html = r"""<!DOCTYPE html>
         </div>
       </div>
 
-      <!-- Right Panel: Task Info + Progress Timeline -->
-      <div class="panel-right">
+      <!-- Right Panel: Info (3 sections) -->
+      <div>
         <div class="panel-header" id="taskRightHeader">
           <span class="i18n-zh">任務詳情</span><span class="i18n-en">Task Detail</span>
         </div>
@@ -1550,10 +1591,7 @@ function renderTasks(tasks, progress) {
         <span class="tc-title">${task.title}</span>
         ${statusBadgeMini(task.status)}
       </div>
-      <div class="tc-row2">
-        ${task.assignee ? '<span>👤 ' + task.assignee + '</span>' : ''}
-        ${total > 0 ? '<span>' + done + '/' + total + '</span>' : ''}
-      </div>
+      ${total > 0 ? '<div class="tc-row2"><span>' + done + '/' + total + '</span></div>' : ''}
       ${total > 0 ? '<div class="progress-wrap"><div class="progress-fill ' + progressCls + '" style="width:' + pct + '%"></div></div>' : ''}
     `;
     card.onclick = () => selectTask(task, progress);
@@ -1617,7 +1655,7 @@ function selectTask(task, progress) {
       </div>
       <div id="subtaskList">
         ${task.subtasks.map((s,si) => `
-          <div class="subtask-row${s.done ? ' done' : ''}" data-subtask-done="${s.done}">
+          <div class="subtask-row${s.done ? ' done' : ''}" data-subtask-done="${s.done}" data-subtask-idx="${si}" onclick="selectSubtask(${si})" style="cursor:pointer">
             <span class="st-icon">${s.done ? '☑' : '☐'}</span>
             <span class="st-text${s.done ? ' done-text' : ''}">${s.text}</span>
           </div>
@@ -1628,7 +1666,7 @@ function selectTask(task, progress) {
     midContent.innerHTML = '<div class="panel-empty"><div>📝</div><span class="i18n-zh">此任務無子任務</span><span class="i18n-en">No subtasks</span></div>';
   }
 
-  // ── Right Panel: Task Info + Progress Timeline ──
+  // ── Right Panel: 3 Sections ──
   const rightHeader = document.getElementById('taskRightHeader');
   const rightContent = document.getElementById('taskRightContent');
   rightHeader.innerHTML = '<span class="i18n-zh">任務詳情</span><span class="i18n-en">Task Detail</span>';
@@ -1636,40 +1674,73 @@ function selectTask(task, progress) {
   const dotColors = ['pt-dot-blue', 'pt-dot-green', 'pt-dot-amber'];
 
   rightContent.innerHTML = `
-    <div class="task-info-section">
-      <div class="task-info-title">${task.title}</div>
-      <div class="task-info-badges">
-        <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}">${task.priority}</span>
-        <span class="badge badge-cat">${task.category || 'General'}</span>
-        ${statusBadge(task.status)}
-        ${task.isOverdue ? '<span class="badge badge-overdue">🚨 已延誤</span>' : ''}
-      </div>
-      <div class="task-info-grid">
+    <!-- Section 1: 主任務資訊 -->
+    <div class="right-section">
+      <div class="right-section-title"><span class="i18n-zh">📋 主任務資訊</span><span class="i18n-en">📋 Task Info</span></div>
+      <div class="task-info-grid" style="padding:8px 14px">
+        <span class="tig-key">📊 <span class="i18n-zh">優先級</span><span class="i18n-en">Priority</span></span><span class="tig-val">${task.priority || 'P3'}</span>
+        <span class="tig-key">🏷️ <span class="i18n-zh">狀態</span><span class="i18n-en">Status</span></span><span class="tig-val">${statusBadge(task.status)}</span>
         ${task.createdDate ? '<span class="tig-key">📅 <span class="i18n-zh">建立日期</span><span class="i18n-en">Created</span></span><span class="tig-val">' + task.createdDate + '</span>' : ''}
         ${task.dueDate ? '<span class="tig-key">⏰ <span class="i18n-zh">預計完成</span><span class="i18n-en">Due Date</span></span><span class="tig-val">' + task.dueDate + '</span>' : ''}
         ${task.assignee ? '<span class="tig-key">👤 <span class="i18n-zh">負責人</span><span class="i18n-en">Assignee</span></span><span class="tig-val">' + task.assignee + '</span>' : ''}
-        <span class="tig-key">🏷️ <span class="i18n-zh">狀態</span><span class="i18n-en">Status</span></span><span class="tig-val">${task.status || 'pending'}</span>
-        <span class="tig-key">📊 <span class="i18n-zh">優先級</span><span class="i18n-en">Priority</span></span><span class="tig-val">${task.priority || 'P3'}</span>
-        ${total > 0 ? '<span class="tig-key">📝 <span class="i18n-zh">子任務進度</span><span class="i18n-en">Subtasks</span></span><span class="tig-val">' + done + '/' + total + ' (' + Math.round(done/total*100) + '%)</span>' : ''}
       </div>
-      ${task.description ? '<div class="task-info-desc">📝 ' + task.description + '</div>' : ''}
+      ${task.description ? '<div class="task-info-desc" style="padding:8px 14px;border-top:1px solid var(--border)">📝 ' + task.description + '</div>' : ''}
     </div>
-    ${related.length > 0 ? `
-      <div class="progress-timeline">
-        <div class="pt-header"><span class="i18n-zh">相關進度記錄</span><span class="i18n-en">Related Progress</span></div>
-        ${related.map((e, i) => `
-          <div class="pt-entry fade-in" style="animation-delay:${i*0.05}s">
-            <div class="pt-line"></div>
-            <div class="pt-dot ${dotColors[i % dotColors.length]}"></div>
-            <div class="pt-body">
-              <div class="pt-date">${e.date}</div>
-              <div class="pt-title">${e.title}</div>
-              ${e.items.length > 0 ? '<div class="pt-items">' + e.items.slice(0,3).map(it => '• ' + it).join('<br>') + '</div>' : ''}
-            </div>
-          </div>
-        `).join('')}
+    <!-- Section 2: 子任務資訊 -->
+    <div class="right-section" id="subtaskInfoSection">
+      <div class="right-section-title"><span class="i18n-zh">📝 子任務資訊</span><span class="i18n-en">📝 Subtask Info</span></div>
+      <div id="subtaskInfoContent" style="padding:14px;color:var(--muted);font-size:12px;text-align:center">
+        <span class="i18n-zh">點擊中間子任務查看詳情</span><span class="i18n-en">Click a subtask to view details</span>
       </div>
-    ` : '<div style="padding:14px;color:var(--muted);font-size:12px"><span class="i18n-zh">暫無相關進度記錄</span><span class="i18n-en">No related progress entries</span></div>'}
+    </div>
+    <!-- Section 3: 進度記錄 -->
+    <div class="right-section" style="border-bottom:none">
+      <div class="right-section-title"><span class="i18n-zh">📊 進度記錄</span><span class="i18n-en">📊 Progress</span></div>
+      ${related.length > 0 ? `
+        <div class="progress-timeline" style="border-top:none">
+          ${related.map((e, i) => `
+            <div class="pt-entry fade-in" style="animation-delay:${i*0.05}s">
+              <div class="pt-line"></div>
+              <div class="pt-dot ${dotColors[i % dotColors.length]}"></div>
+              <div class="pt-body">
+                <div class="pt-date">${e.date}</div>
+                <div class="pt-title">${e.title}</div>
+                ${e.items.length > 0 ? '<div class="pt-items">' + e.items.slice(0,3).map(it => '• ' + it).join('<br>') + '</div>' : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div style="padding:14px;color:var(--muted);font-size:12px;text-align:center"><span class="i18n-zh">暫無相關進度記錄</span><span class="i18n-en">No related progress entries</span></div>'}
+    </div>
+  `;
+
+  // Store subtasks for right-panel subtask info
+  window._currentTaskSubtasks = task.subtasks;
+}
+
+// ─── Select Subtask (show info in right panel) ───
+function selectSubtask(idx) {
+  const subtasks = window._currentTaskSubtasks || [];
+  if (!subtasks[idx]) return;
+  const s = subtasks[idx];
+
+  // Highlight selected subtask row
+  document.querySelectorAll('#subtaskList .subtask-row').forEach(r => r.style.background = '');
+  const rows = document.querySelectorAll('#subtaskList .subtask-row');
+  if (rows[idx]) rows[idx].style.background = 'rgba(99,102,241,.12)';
+
+  const infoEl = document.getElementById('subtaskInfoContent');
+  if (!infoEl) return;
+  infoEl.innerHTML = `
+    <div style="padding:4px 0;text-align:left">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">${s.done ? '☑' : '☐'} ${s.text}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge ${s.done ? 'badge-ok' : 'badge-warn'}" style="font-size:10px">
+          <span class="i18n-zh">${s.done ? '已完成' : '待辦'}</span>
+          <span class="i18n-en">${s.done ? 'Done' : 'Pending'}</span>
+        </span>
+      </div>
+    </div>
   `;
 }
 
@@ -1677,7 +1748,7 @@ function selectTask(task, progress) {
 function filterSubtasks(type, btn) {
   document.querySelectorAll('#subtaskFilter .subtask-filter-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  const items = document.querySelectorAll('#subtaskList .subtask-item');
+  const items = document.querySelectorAll('#subtaskList .subtask-row');
   items.forEach(item => {
     const isDone = item.dataset.subtaskDone === 'true';
     if (type === 'all') item.style.display = '';
