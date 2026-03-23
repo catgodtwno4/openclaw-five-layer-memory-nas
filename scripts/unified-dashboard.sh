@@ -461,8 +461,10 @@ html = r"""<!DOCTYPE html>
 
   /* ── Content ── */
   .tab-content { display: none; }
-  .tab-content.active { display: block; }
-  .page { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .tab-content.active { display: flex; flex-direction: column; height: calc(100vh - 60px); }
+  .page { padding: 16px; max-width: 1400px; margin: 0 auto; width: 100%; }
+  #tab-tasks { padding: 0; max-width: 100%; }
+  #tab-tasks .page { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 0; }
 
   /* ── Stats Row ── */
   .stats-row {
@@ -554,7 +556,7 @@ html = r"""<!DOCTYPE html>
   .progress-amber { background: var(--amber); }
 
   /* ── Tasks Layout ── */
-  .tasks-layout { display: flex; flex-direction: column; gap: 12px; }
+  .tasks-layout { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; padding: 12px 16px; box-sizing: border-box; }
   .tasks-stats-row {
     display: flex;
     align-items: center;
@@ -570,13 +572,14 @@ html = r"""<!DOCTYPE html>
     background: var(--border);
     border-radius: 12px;
     overflow: hidden;
-    min-height: 500px;
-    height: calc(100vh - 300px);
+    flex: 1;
+    min-height: 0;
   }
   .tasks-panels > div {
     flex: 1;
     background: var(--bg);
     overflow-y: auto;
+    padding: 0;
   }
 
   /* ── Three-Panel Layout (Memory) ── */
@@ -671,9 +674,10 @@ html = r"""<!DOCTYPE html>
     font-size: 12px; line-height: 1.5;
   }
   .subtask-row.done { opacity: 0.55; }
-  .subtask-row .st-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
+  .subtask-row .st-icon { flex-shrink: 0; font-size: 14px; margin-top: 2px; }
   .subtask-row .st-text { flex: 1; }
   .subtask-row .st-text.done-text { text-decoration: line-through; color: var(--muted); }
+  .subtask-row .st-meta { font-size: 10px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 
   /* ── Task Info (right panel) ── */
   .task-info-section { padding: 14px; }
@@ -1659,15 +1663,20 @@ function selectTask(task, progress) {
         </div>
       </div>
       <div id="subtaskList">
-        ${task.subtasks.map((s,si) => `
+        ${task.subtasks.map((s,si) => {
+          const created = task.createdDate || '—';
+          const due = task.dueDate || '—';
+          const assignee = s.assignee || task.assignee || '—';
+          const statusIcon = s.done ? '✅已完成' : '⏳待辦';
+          return `
           <div class="subtask-row${s.done ? ' done' : ''}" data-subtask-done="${s.done}" data-subtask-idx="${si}" onclick="selectSubtask(${si})" style="cursor:pointer">
             <span class="st-icon">${s.done ? '☑' : '☐'}</span>
             <div style="flex:1;min-width:0">
               <span class="st-text${s.done ? ' done-text' : ''}">${s.text}</span>
-              ${s.assignee ? '<div style="font-size:9px;color:var(--muted);margin-top:1px">👤 ' + s.assignee + '</div>' : ''}
+              <div class="st-meta">📅 ${created} | ⏰ ${due} | 👤 ${assignee} | ${statusIcon}</div>
             </div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>
     `;
   } else {
