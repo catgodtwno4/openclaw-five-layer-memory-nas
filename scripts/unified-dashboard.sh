@@ -562,20 +562,116 @@ html = r"""<!DOCTYPE html>
   .timeline-title-text { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
   .timeline-items { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
-  /* ── Tab 2: Memory ── */
-  .memory-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 20px;
+  /* ── Tab 2: Memory — Three-Panel Layout ── */
+  .memory-page { padding: 12px !important; }
+  .memory-panels {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 76px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
   }
-  .mem-card { position: relative; }
-  .mem-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .mem-name { font-size: 14px; font-weight: 700; }
-  .mem-metrics { display: flex; flex-direction: column; gap: 5px; }
-  .mem-metric { display: flex; justify-content: space-between; font-size: 12px; }
-  .mem-metric-key { color: var(--muted); }
-  .mem-metric-val { color: var(--text); font-weight: 500; }
+  /* Left panel */
+  .mem-left-panel {
+    width: 25%;
+    min-width: 180px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .mem-panel-header {
+    padding: 10px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .mem-layer-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all .15s;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid rgba(51,65,85,.4);
+  }
+  .mem-layer-item:hover { background: var(--surface2); }
+  .mem-layer-item.selected {
+    background: rgba(99,102,241,.12);
+    border-left-color: var(--accent);
+  }
+  .mem-layer-name { font-size: 12px; font-weight: 600; flex: 1; line-height: 1.3; }
+  .mem-layer-sub { font-size: 10px; color: var(--muted); }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .dot-ok { background: var(--green); box-shadow: 0 0 4px var(--green); }
+  .dot-warn { background: var(--amber); }
+  .dot-err { background: var(--rose); }
+  /* Middle panel */
+  .mem-mid-panel {
+    width: 35%;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  /* Right panel */
+  .mem-right-panel {
+    flex: 1;
+    overflow-y: auto;
+  }
+  /* Panel empty state */
+  .mem-panel-empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 200px; gap: 8px;
+    color: var(--muted); font-size: 13px; text-align: center;
+  }
+  .mem-panel-empty div { font-size: 28px; }
+  /* Middle panel items */
+  .mem-mid-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer; transition: all .15s;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid rgba(51,65,85,.3);
+    font-size: 12px;
+  }
+  .mem-mid-item:hover { background: var(--surface2); }
+  .mem-mid-item.selected {
+    background: rgba(99,102,241,.1);
+    border-left-color: var(--accent);
+  }
+  .mem-mid-item-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mem-mid-item-meta { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+  /* Right panel detail */
+  .mem-detail-content { padding: 16px; }
+  .mem-detail-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; word-break: break-all; }
+  .mem-detail-meta { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .mem-detail-preview {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+    font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px;
+    color: #cbd5e1; line-height: 1.6; white-space: pre-wrap;
+    word-break: break-word; max-height: 300px; overflow-y: auto;
+  }
+  .mem-kv-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .mem-kv-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(51,65,85,.3); font-size: 12px; }
+  .mem-kv-row:last-child { border-bottom: none; }
+  .mem-kv-key { color: var(--muted); }
+  .mem-kv-val { font-weight: 600; color: var(--text); }
+  /* Latency gauge */
+  .latency-gauge {
+    display: flex; align-items: center; gap: 12px; padding: 12px 0;
+  }
+  .gauge-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden; }
+  .gauge-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+  .gauge-ok { background: var(--green); }
+  .gauge-warn { background: var(--amber); }
+  .gauge-err { background: var(--rose); }
 
   /* System status row */
   .sys-row {
@@ -601,6 +697,13 @@ html = r"""<!DOCTYPE html>
   /* ── Tab 3: Users ── */
   .users-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .users-title { font-size: 16px; font-weight: 700; }
+  .cf-access-note {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.25);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+    font-size: 12px; color: #a5b4fc; line-height: 1.5;
+  }
+  .cf-access-note .note-icon { font-size: 16px; flex-shrink: 0; }
   .btn-primary {
     padding: 8px 16px; border-radius: 8px; border: none;
     background: var(--accent); color: #fff;
@@ -699,12 +802,20 @@ html = r"""<!DOCTYPE html>
       height: auto;
     }
     .task-list-panel { max-height: 50vh; }
-    .memory-grid { grid-template-columns: repeat(2, 1fr); }
+    .memory-panels {
+      flex-direction: column;
+      height: auto;
+    }
+    .mem-left-panel, .mem-mid-panel {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .mem-right-panel { min-height: 300px; }
     .sys-row { grid-template-columns: repeat(2, 1fr); }
     .nav-time { display: none; }
   }
   @media (max-width: 480px) {
-    .memory-grid { grid-template-columns: 1fr; }
     .sys-row { grid-template-columns: 1fr; }
   }
 
@@ -768,20 +879,33 @@ html = r"""<!DOCTYPE html>
 
 <!-- Tab: Memory -->
 <div class="tab-content" id="tab-memory">
-  <div class="page">
-    <div class="section-header" style="margin-bottom:16px">
-      <span class="i18n-zh">記憶層狀態</span>
-      <span class="i18n-en">Memory Layer Status</span>
-    </div>
-    <div class="memory-grid" id="memoryGrid">
-      <!-- Memory cards injected here -->
-    </div>
-    <div class="section-header" style="margin-bottom:12px">
-      <span class="i18n-zh">系統狀態</span>
-      <span class="i18n-en">System Status</span>
-    </div>
-    <div class="sys-row" id="sysRow">
-      <!-- System status injected here -->
+  <div class="page memory-page">
+    <div class="memory-panels">
+      <!-- Left: Layer list -->
+      <div class="mem-left-panel">
+        <div class="mem-panel-header">
+          <span class="i18n-zh">記憶層</span><span class="i18n-en">Layers</span>
+        </div>
+        <div id="memLayerList"><!-- injected --></div>
+      </div>
+      <!-- Middle: Files/Outline -->
+      <div class="mem-mid-panel">
+        <div class="mem-panel-header" id="memMidHeader">
+          <span class="i18n-zh">選擇層以查看詳情</span><span class="i18n-en">Select a layer</span>
+        </div>
+        <div id="memMidContent">
+          <div class="mem-panel-empty"><div>📂</div><span class="i18n-zh">點擊左側層查看</span><span class="i18n-en">Click a layer to view</span></div>
+        </div>
+      </div>
+      <!-- Right: Detail -->
+      <div class="mem-right-panel">
+        <div class="mem-panel-header" id="memRightHeader">
+          <span class="i18n-zh">詳細資訊</span><span class="i18n-en">Detail</span>
+        </div>
+        <div id="memRightContent">
+          <div class="mem-panel-empty"><div>🔍</div><span class="i18n-zh">選擇項目查看詳情</span><span class="i18n-en">Select an item</span></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -799,13 +923,20 @@ html = r"""<!DOCTYPE html>
         <span class="i18n-en">+ Add User</span>
       </button>
     </div>
+    <div class="cf-access-note">
+      <span class="note-icon">🔒</span>
+      <span>
+        <span class="i18n-zh">此儀表板受 <b>Cloudflare Access</b> 保護。使用者透過電子郵件驗證登入，無需密碼。</span>
+        <span class="i18n-en">This dashboard is protected by <b>Cloudflare Access</b>. Users login via email verification — no password required.</span>
+      </span>
+    </div>
     <div class="card">
       <table class="users-table">
         <thead>
           <tr>
-            <th><span class="i18n-zh">使用者名稱</span><span class="i18n-en">Username</span></th>
+            <th><span class="i18n-zh">電子郵件</span><span class="i18n-en">Email</span></th>
             <th><span class="i18n-zh">角色</span><span class="i18n-en">Role</span></th>
-            <th><span class="i18n-zh">建立時間</span><span class="i18n-en">Created</span></th>
+            <th><span class="i18n-zh">加入日期</span><span class="i18n-en">Added Date</span></th>
             <th><span class="i18n-zh">操作</span><span class="i18n-en">Actions</span></th>
           </tr>
         </thead>
@@ -819,32 +950,56 @@ html = r"""<!DOCTYPE html>
 <!-- Add User Modal -->
 <div class="modal-overlay" id="userModal">
   <div class="modal">
-    <div class="modal-title">
+    <div class="modal-title" id="userModalTitle">
       <span class="i18n-zh">新增使用者</span>
       <span class="i18n-en">Add User</span>
     </div>
     <div class="form-group">
-      <label class="form-label"><span class="i18n-zh">使用者名稱</span><span class="i18n-en">Username</span></label>
-      <input class="form-input" id="newUsername" type="text" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label class="form-label"><span class="i18n-zh">密碼</span><span class="i18n-en">Password</span></label>
-      <input class="form-input" id="newPassword" type="password" autocomplete="new-password">
+      <label class="form-label"><span class="i18n-zh">電子郵件</span><span class="i18n-en">Email</span></label>
+      <input class="form-input" id="newEmail" type="email" placeholder="user@example.com" autocomplete="off">
     </div>
     <div class="form-group">
       <label class="form-label"><span class="i18n-zh">角色</span><span class="i18n-en">Role</span></label>
       <select class="form-select" id="newRole">
         <option value="admin">Admin</option>
-        <option value="agent">Agent</option>
         <option value="viewer">Viewer</option>
       </select>
+    </div>
+    <div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;padding:10px 12px;font-size:11px;color:#a5b4fc;margin-bottom:4px;line-height:1.5;">
+      🔒 <span class="i18n-zh">使用者將透過 Cloudflare Access 電子郵件驗證登入</span><span class="i18n-en">User will login via Cloudflare Access email verification</span>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">
         <span class="i18n-zh">取消</span><span class="i18n-en">Cancel</span>
       </button>
-      <button class="btn-primary" onclick="addUser()">
-        <span class="i18n-zh">新增</span><span class="i18n-en">Add</span>
+      <button class="btn-primary" onclick="submitUserModal()">
+        <span id="userModalSubmitLabel"><span class="i18n-zh">新增</span><span class="i18n-en">Add</span></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div class="modal-overlay" id="editRoleModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span class="i18n-zh">變更角色</span>
+      <span class="i18n-en">Change Role</span>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="editRoleEmail"></div>
+    <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">角色</span><span class="i18n-en">Role</span></label>
+      <select class="form-select" id="editRoleSelect">
+        <option value="admin">Admin</option>
+        <option value="viewer">Viewer</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeEditRoleModal()">
+        <span class="i18n-zh">取消</span><span class="i18n-en">Cancel</span>
+      </button>
+      <button class="btn-primary" onclick="saveEditRole()">
+        <span class="i18n-zh">儲存</span><span class="i18n-en">Save</span>
       </button>
     </div>
   </div>
@@ -1044,140 +1199,307 @@ function selectTask(task, progress) {
   `;
 }
 
-// ─── Memory ───
+// ─── Memory — Three-Panel ───
+let memData = null;
+let selectedLayerKey = null;
+let selectedMidIndex = null;
+
 function renderMemory(m) {
-  const grid = document.getElementById('memoryGrid');
-  grid.innerHTML = '';
+  memData = m;
+  selectedLayerKey = null;
+  selectedMidIndex = null;
 
   const layers = [
-    {
-      key: 'l0', label: 'L0', name: { zh: 'Markdown 文件', en: 'Markdown Files' },
-      metrics: m.l0 ? [
-        { zh: '文件數', en: 'Files', val: m.l0.files },
-        { zh: '大小', en: 'Size', val: m.l0.size_kb + ' KB' },
-      ] : []
-    },
-    {
-      key: 'l1', label: 'L1', name: { zh: 'lossless-claw', en: 'lossless-claw' },
-      metrics: m.l1 ? [
-        { zh: '摘要數', en: 'Summaries', val: m.l1.summaries },
-        { zh: '模型', en: 'Model', val: shortModel(m.l1.model) },
-        { zh: 'DB 大小', en: 'DB Size', val: m.l1.db_size_kb + ' KB' },
-      ] : []
-    },
-    {
-      key: 'l2', label: 'L2', name: { zh: 'LanceDB 向量', en: 'LanceDB Vector' },
-      metrics: m.l2 ? [
-        { zh: 'Lance 檔案', en: 'Lance Files', val: m.l2.lance_files },
-        { zh: 'DB 大小', en: 'DB Size', val: m.l2.db_size_mb + ' MB' },
-        { zh: '半衰期', en: 'Half-life', val: m.l2.halflife_days + ' days' },
-      ] : []
-    },
-    {
-      key: 'l3', label: 'L3', name: { zh: 'QMD BM25', en: 'QMD BM25' },
-      metrics: m.l3 ? [
-        { zh: '文件數', en: 'Documents', val: m.l3.documents },
-        { zh: '引擎', en: 'Engine', val: m.l3.engine },
-      ] : []
-    },
-    {
-      key: 'l2plus', label: 'L2+', name: { zh: 'MemOS 知識圖譜', en: 'MemOS Knowledge Graph' },
-      metrics: m.l2plus ? [
-        { zh: '搜索延遲', en: 'Search Latency', val: m.l2plus.search_latency_ms >= 0 ? m.l2plus.search_latency_ms + ' ms' : 'N/A' },
-        { zh: 'LLM', en: 'LLM', val: shortModel(m.l2plus.llm_model) },
-        { zh: 'Neo4j', en: 'Neo4j', val: m.l2plus.neo4j },
-        { zh: 'Qdrant', en: 'Qdrant', val: m.l2plus.qdrant },
-      ] : []
-    },
-    {
-      key: 'l4', label: 'L4', name: { zh: 'Cognee 深度理解', en: 'Cognee Deep Cognition' },
-      metrics: m.l4 ? [
-        { zh: '搜索延遲', en: 'Search Latency', val: m.l4.search_latency_ms >= 0 ? m.l4.search_latency_ms + ' ms' : 'N/A' },
-        { zh: 'LLM', en: 'LLM', val: shortModel(m.l4.llm_model) },
-      ] : []
-    },
+    { key: 'l0',     label: 'L0',  name: { zh: 'Markdown 文件', en: 'Markdown Files' } },
+    { key: 'l1',     label: 'L1',  name: { zh: 'lossless-claw', en: 'lossless-claw' } },
+    { key: 'l2',     label: 'L2',  name: { zh: 'LanceDB 向量', en: 'LanceDB Vector' } },
+    { key: 'l3',     label: 'L3',  name: { zh: 'QMD BM25', en: 'QMD BM25' } },
+    { key: 'l2plus', label: 'L2+', name: { zh: 'MemOS 知識圖譜', en: 'MemOS Graph' } },
+    { key: 'l4',     label: 'L4',  name: { zh: 'Cognee 深度理解', en: 'Cognee Cognition' } },
+    { key: 'system', label: '⚙',   name: { zh: '系統', en: 'System' } },
   ];
 
+  const listEl = document.getElementById('memLayerList');
+  listEl.innerHTML = '';
   layers.forEach((layer, idx) => {
-    const data = m[layer.key] || {};
+    const data = layer.key === 'system' ? { status: (m.gateway?.status || 'ok') } : (m[layer.key] || {});
     const status = data.status || 'warn';
-    const card = document.createElement('div');
-    card.className = 'card mem-card fade-in';
-    card.style.animationDelay = (idx * 0.06) + 's';
-    card.innerHTML = `
-      <div class="mem-card-header">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="badge badge-layer">${layer.label}</span>
-          <span class="mem-name">
-            <span class="i18n-zh">${layer.name.zh}</span>
-            <span class="i18n-en">${layer.name.en}</span>
-          </span>
-        </div>
-        <span class="badge badge-${status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : 'err'}">
-          ${status === 'ok' ? '✓ OK' : status === 'warn' ? '⚠ Warn' : '✗ Err'}
-        </span>
+    const dotCls = status === 'ok' ? 'dot-ok' : status === 'warn' ? 'dot-warn' : 'dot-err';
+    const item = document.createElement('div');
+    item.className = 'mem-layer-item fade-in';
+    item.style.animationDelay = (idx * 0.05) + 's';
+    item.dataset.key = layer.key;
+    item.innerHTML = `
+      <span class="badge badge-layer" style="font-size:10px;padding:1px 6px">${layer.label}</span>
+      <div style="flex:1;min-width:0">
+        <div class="mem-layer-name"><span class="i18n-zh">${layer.name.zh}</span><span class="i18n-en">${layer.name.en}</span></div>
       </div>
-      <div class="mem-metrics">
-        ${layer.metrics.map(metric => `
-          <div class="mem-metric">
-            <span class="mem-metric-key">
-              <span class="i18n-zh">${metric.zh}</span>
-              <span class="i18n-en">${metric.en}</span>
-            </span>
-            <span class="mem-metric-val">${metric.val ?? '—'}</span>
-          </div>
-        `).join('')}
-      </div>
+      <span class="status-dot ${dotCls}"></span>
     `;
-    grid.appendChild(card);
+    item.onclick = () => selectMemLayer(layer.key);
+    listEl.appendChild(item);
+  });
+}
+
+function selectMemLayer(key) {
+  selectedLayerKey = key;
+  selectedMidIndex = null;
+
+  document.querySelectorAll('.mem-layer-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.key === key);
   });
 
-  // System status row
-  const sysRow = document.getElementById('sysRow');
-  sysRow.innerHTML = '';
+  renderMemMid(key);
 
-  // Gateway
+  document.getElementById('memRightContent').innerHTML =
+    '<div class="mem-panel-empty"><div>🔍</div><span class="i18n-zh">選擇項目查看詳情</span><span class="i18n-en">Select an item</span></div>';
+  document.getElementById('memRightHeader').innerHTML =
+    '<span class="i18n-zh">詳細資訊</span><span class="i18n-en">Detail</span>';
+}
+
+function renderMemMid(key) {
+  const m = memData || {};
+  const midEl = document.getElementById('memMidContent');
+  const hdrEl = document.getElementById('memMidHeader');
+  midEl.innerHTML = '';
+
+  const mkItem = (icon, name, meta, idx) => {
+    const el = document.createElement('div');
+    el.className = 'mem-mid-item fade-in';
+    el.style.animationDelay = (idx * 0.04) + 's';
+    el.dataset.idx = idx;
+    el.innerHTML = `<span style="font-size:14px">${icon}</span><span class="mem-mid-item-name">${name}</span><span class="mem-mid-item-meta">${meta}</span>`;
+    midEl.appendChild(el);
+    return el;
+  };
+
+  const selectMid = (idx, el, detailFn) => {
+    selectedMidIndex = idx;
+    document.querySelectorAll('.mem-mid-item').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    detailFn();
+  };
+
+  if (key === 'l0') {
+    hdrEl.innerHTML = '<span class="i18n-zh">工作區 MD 文件</span><span class="i18n-en">Workspace MD Files</span>';
+    const names = m.l0?.names || [];
+    if (!names.length) { midEl.innerHTML = '<div class="mem-panel-empty"><div>📄</div>No files</div>'; return; }
+    names.forEach((name, i) => {
+      const el = mkItem('📄', name, '', i);
+      el.onclick = () => selectMid(i, el, () => renderDetailL0File(name));
+    });
+
+  } else if (key === 'l1') {
+    hdrEl.innerHTML = '<span class="i18n-zh">lossless-claw 概覽</span><span class="i18n-en">lossless-claw Overview</span>';
+    const d = m.l1 || {};
+    const items = [
+      { icon: '📊', name: '摘要統計 / Summary Stats', meta: d.summaries + ' entries' },
+      { icon: '🤖', name: '摘要模型 / Summary Model', meta: shortModel(d.model) },
+      { icon: '💾', name: 'SQLite DB', meta: d.db_size_kb + ' KB' },
+    ];
+    items.forEach((it, i) => {
+      const el = mkItem(it.icon, it.name, it.meta, i);
+      el.onclick = () => selectMid(i, el, () => renderDetailKV('lossless-claw', [
+        { k: 'Summaries', v: d.summaries },
+        { k: 'Model', v: d.model },
+        { k: 'DB Size', v: d.db_size_kb + ' KB' },
+        { k: 'Status', v: d.status },
+      ]));
+    });
+
+  } else if (key === 'l2') {
+    hdrEl.innerHTML = '<span class="i18n-zh">LanceDB 配置</span><span class="i18n-en">LanceDB Config</span>';
+    const d = m.l2 || {};
+    const items = [
+      { icon: '🗄', name: '向量資料庫 / Vector DB', meta: d.lance_files + ' files' },
+      { icon: '🧬', name: '嵌入模型 / Embedding Model', meta: shortModel(d.embedding_model) },
+      { icon: '⏱', name: '衰減設定 / Decay Settings', meta: 'T½ ' + d.halflife_days + 'd' },
+      { icon: '🔃', name: 'Rerank 設定 / Rerank Config', meta: d.rerank || 'none' },
+    ];
+    items.forEach((it, i) => {
+      const el = mkItem(it.icon, it.name, it.meta, i);
+      el.onclick = () => selectMid(i, el, () => renderDetailKV('LanceDB Pro', [
+        { k: 'Lance Files', v: d.lance_files },
+        { k: 'DB Size', v: d.db_size_mb + ' MB' },
+        { k: 'Embedding Model', v: d.embedding_model },
+        { k: 'Rerank', v: d.rerank },
+        { k: 'Half-life (days)', v: d.halflife_days },
+        { k: 'Recency Weight', v: d.recency_weight },
+        { k: 'Status', v: d.status },
+      ]));
+    });
+
+  } else if (key === 'l3') {
+    hdrEl.innerHTML = '<span class="i18n-zh">QMD 文件</span><span class="i18n-en">QMD Documents</span>';
+    const d = m.l3 || {};
+    const el0 = mkItem('📚', d.documents + ' Documents', d.engine, 0);
+    el0.onclick = () => selectMid(0, el0, () => renderDetailKV('QMD BM25', [
+      { k: 'Documents', v: d.documents },
+      { k: 'Engine', v: d.engine },
+      { k: 'Status', v: d.status },
+    ]));
+
+  } else if (key === 'l2plus') {
+    hdrEl.innerHTML = '<span class="i18n-zh">MemOS 服務</span><span class="i18n-en">MemOS Services</span>';
+    const d = m.l2plus || {};
+    const items = [
+      { icon: '🌐', name: 'API Endpoint', meta: d.status === 'ok' ? '✓ OK' : '✗ Error' },
+      { icon: '🕸', name: 'Neo4j Graph DB', meta: d.neo4j || '—' },
+      { icon: '📐', name: 'Qdrant Vector DB', meta: d.qdrant || '—' },
+      { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
+    ];
+    items.forEach((it, i) => {
+      const el = mkItem(it.icon, it.name, it.meta, i);
+      el.onclick = () => selectMid(i, el, () => renderDetailL2plus(d));
+    });
+
+  } else if (key === 'l4') {
+    hdrEl.innerHTML = '<span class="i18n-zh">Cognee 服務</span><span class="i18n-en">Cognee Services</span>';
+    const d = m.l4 || {};
+    const items = [
+      { icon: '🌐', name: 'API Endpoint', meta: d.status === 'ok' ? '✓ OK' : '✗ Error' },
+      { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
+      { icon: '🤖', name: 'LLM Model', meta: shortModel(d.llm_model) },
+    ];
+    items.forEach((it, i) => {
+      const el = mkItem(it.icon, it.name, it.meta, i);
+      el.onclick = () => selectMid(i, el, () => renderDetailL4(d));
+    });
+
+  } else if (key === 'system') {
+    hdrEl.innerHTML = '<span class="i18n-zh">系統概覽</span><span class="i18n-en">System Overview</span>';
+    const gw = m.gateway || {};
+    const disk = m.disk || {};
+    const items = [
+      { icon: '🌐', name: 'Gateway', meta: gw.status === 'ok' ? '✓ OK' : '⚠ ' + gw.critical_issues + ' issues' },
+      { icon: '💾', name: 'Disk /', meta: disk.root || '—' },
+      { icon: '🏠', name: 'Disk /Users', meta: disk.users || '—' },
+      { icon: '🐳', name: 'NAS Containers', meta: (m.l2plus?.status === 'ok' && m.l4?.status === 'ok') ? '✓ Running' : '⚠ Partial' },
+    ];
+    items.forEach((it, i) => {
+      const el = mkItem(it.icon, it.name, it.meta, i);
+      el.onclick = () => selectMid(i, el, () => renderDetailSystem(m));
+    });
+  }
+}
+
+function renderDetailL0File(filename) {
+  const d = memData?.l0 || {};
+  const right = document.getElementById('memRightContent');
+  right.innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">📄 ${filename}</div>
+      <div class="mem-detail-meta">~/.openclaw/workspace/${filename}</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">Total Files</span><span class="mem-kv-val">${d.files}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Total Size</span><span class="mem-kv-val">${d.size_kb} KB</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Status</span><span class="mem-kv-val">${d.status}</span></div>
+      </div>
+      <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">
+        <span class="i18n-zh">檔案預覽</span><span class="i18n-en">File preview</span>
+      </div>
+      <div class="mem-detail-preview" id="l0FilePreview"><span style="color:var(--muted)">Loading...</span></div>
+    </div>
+  `;
+  fetch('/api/file?path=workspace/' + encodeURIComponent(filename))
+    .then(r => r.ok ? r.text() : null)
+    .then(text => {
+      const el = document.getElementById('l0FilePreview');
+      if (el) el.textContent = text ? text.slice(0, 500) + (text.length > 500 ? '\n...' : '') : '(preview not available via API)';
+    }).catch(() => {
+      const el = document.getElementById('l0FilePreview');
+      if (el) el.textContent = '(preview not available via API)';
+    });
+}
+
+function renderDetailKV(title, kvs) {
+  document.getElementById('memRightContent').innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">${title}</div>
+      <div class="mem-kv-list">
+        ${kvs.map(kv => `<div class="mem-kv-row"><span class="mem-kv-key">${kv.k}</span><span class="mem-kv-val">${kv.v ?? '—'}</span></div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function latencyBlock(ms) {
+  const gaugePct = ms < 0 ? 0 : Math.min(100, Math.round(ms / 15));
+  const gaugeCls = ms < 0 ? 'gauge-err' : ms < 500 ? 'gauge-ok' : ms < 1500 ? 'gauge-warn' : 'gauge-err';
+  return `<div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:6px">Search Latency</div>
+    <div class="latency-gauge">
+      <span style="font-size:18px;font-weight:700;color:var(--text)">${ms >= 0 ? ms + ' ms' : 'N/A'}</span>
+      <div class="gauge-bar-wrap"><div class="gauge-bar-fill ${gaugeCls}" style="width:${gaugePct}%"></div></div>
+    </div>`;
+}
+
+function renderDetailL2plus(d) {
+  document.getElementById('memRightContent').innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">MemOS L2+</div>
+      <div class="mem-detail-meta">${d.api || ''}</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">API Status</span><span class="mem-kv-val" style="color:var(--${d.status==='ok'?'green':'rose'})">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge badge-layer" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val" style="color:var(--${d.neo4j==='ok'?'green':'rose'})">${d.neo4j==='ok'?'✓ OK':'✗ Error'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val" style="color:var(--${d.qdrant==='ok'?'green':'rose'})">${d.qdrant==='ok'?'✓ OK':'✗ Error'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
+      </div>
+      ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
+    </div>
+  `;
+}
+
+function renderDetailL4(d) {
+  document.getElementById('memRightContent').innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">Cognee L4</div>
+      <div class="mem-detail-meta">${d.api || ''}</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">API Status</span><span class="mem-kv-val" style="color:var(--${d.status==='ok'?'green':'rose'})">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge badge-layer" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Endpoint</span><span class="mem-kv-val" style="font-size:11px">${d.api || '—'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
+      </div>
+      ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
+    </div>
+  `;
+}
+
+function renderDetailSystem(m) {
   const gw = m.gateway || {};
-  sysRow.innerHTML += `
-    <div class="sys-card fade-in">
-      <div class="sys-icon">🌐</div>
-      <div class="sys-label">Gateway</div>
-      <div class="sys-value" style="color:var(--${gw.status === 'ok' ? 'green' : 'amber'})">${gw.status === 'ok' ? 'OK' : 'Warn'}</div>
-      <div class="sys-sub">${gw.critical_issues ?? 0} critical issues</div>
-    </div>`;
-
-  // Disk /
-  const diskRootPct = parseInt((m.disk?.root || '0%'));
-  const diskRootCls = diskRootPct > 85 ? 'err' : diskRootPct > 70 ? 'warn' : 'ok';
-  sysRow.innerHTML += `
-    <div class="sys-card fade-in" style="animation-delay:.06s">
-      <div class="sys-icon">💾</div>
-      <div class="sys-label">Disk /</div>
-      <div class="sys-value" style="color:var(--${diskRootCls === 'ok' ? 'green' : diskRootCls === 'warn' ? 'amber' : 'rose'})">${m.disk?.root || '—'}</div>
-      <div class="disk-track"><div class="disk-fill disk-${diskRootCls}" style="width:${diskRootPct}%"></div></div>
-    </div>`;
-
-  // Disk /Users
-  const diskUsersPct = parseInt((m.disk?.users || '0%'));
-  const diskUsersCls = diskUsersPct > 85 ? 'err' : diskUsersPct > 70 ? 'warn' : 'ok';
-  sysRow.innerHTML += `
-    <div class="sys-card fade-in" style="animation-delay:.12s">
-      <div class="sys-icon">🏠</div>
-      <div class="sys-label">Disk /Users</div>
-      <div class="sys-value" style="color:var(--${diskUsersCls === 'ok' ? 'green' : diskUsersCls === 'warn' ? 'amber' : 'rose'})">${m.disk?.users || '—'}</div>
-      <div class="disk-track"><div class="disk-fill disk-${diskUsersCls}" style="width:${diskUsersPct}%"></div></div>
-    </div>`;
-
-  // NAS Docker
-  const nasOk = m.l2plus?.status === 'ok' && m.l4?.status === 'ok';
-  const nasCls = nasOk ? 'ok' : (m.l2plus?.status !== 'error' && m.l4?.status !== 'error') ? 'warn' : 'err';
-  sysRow.innerHTML += `
-    <div class="sys-card fade-in" style="animation-delay:.18s">
-      <div class="sys-icon">🐳</div>
-      <div class="sys-label">NAS Docker</div>
-      <div class="sys-value" style="color:var(--${nasCls === 'ok' ? 'green' : nasCls === 'warn' ? 'amber' : 'rose'})">${nasOk ? 'Running' : 'Partial'}</div>
-      <div class="sys-sub">MemOS + Cognee<br>10.10.10.66</div>
-    </div>`;
+  const disk = m.disk || {};
+  const rootPct = parseInt(disk.root || '0');
+  const usersPct = parseInt(disk.users || '0');
+  const rootCls = rootPct > 85 ? 'gauge-err' : rootPct > 70 ? 'gauge-warn' : 'gauge-ok';
+  const usersCls = usersPct > 85 ? 'gauge-err' : usersPct > 70 ? 'gauge-warn' : 'gauge-ok';
+  document.getElementById('memRightContent').innerHTML = `
+    <div class="mem-detail-content fade-in">
+      <div class="mem-detail-title">⚙ System</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">Gateway</span><span class="mem-kv-val" style="color:var(--${gw.status==='ok'?'green':'amber'})">${gw.status==='ok'?'✓ Running':'⚠ Warning'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Critical Issues</span><span class="mem-kv-val">${gw.critical_issues ?? 0}</span></div>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px">Disk Usage</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>/ (root)</span><span style="font-weight:600">${disk.root || '—'}</span></div>
+          <div class="gauge-bar-wrap" style="height:6px;border-radius:3px"><div class="gauge-bar-fill ${rootCls}" style="width:${rootPct}%"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>/Users</span><span style="font-weight:600">${disk.users || '—'}</span></div>
+          <div class="gauge-bar-wrap" style="height:6px;border-radius:3px"><div class="gauge-bar-fill ${usersCls}" style="width:${usersPct}%"></div></div>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px">NAS Containers (10.10.10.66)</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">oc-memos-api</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.status==='ok'?'green':'rose'})">${m.l2plus?.status==='ok'?'✓ Running':'✗ Error'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">oc-cognee-api</span><span class="mem-kv-val" style="color:var(--${m.l4?.status==='ok'?'green':'rose'})">${m.l4?.status==='ok'?'✓ Running':'✗ Error'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.neo4j==='ok'?'green':'rose'})">${m.l2plus?.neo4j==='ok'?'✓ OK':'✗ Error'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.qdrant==='ok'?'green':'rose'})">${m.l2plus?.qdrant==='ok'?'✓ OK':'✗ Error'}</span></div>
+      </div>
+    </div>
+  `;
 }
 
 function shortModel(m) {
@@ -1185,21 +1507,31 @@ function shortModel(m) {
   return m.replace('MiniMax-M2.7-highspeed', 'M2.7-HS').replace('openai/', '').replace('anthropic/', '');
 }
 
-// ─── Users ───
+// ─── Users (Cloudflare Access email-based) ───
+let editingUserEmail = null;
+
 function renderUsers(users) {
+  // Migrate old username-based users to email format if needed
+  users = users.map(u => ({
+    email: u.email || (u.username ? u.username + '@example.com' : ''),
+    role: u.role === 'agent' ? 'viewer' : (u.role || 'viewer'),
+    createdAt: u.createdAt || u.created || new Date().toISOString().split('T')[0],
+  }));
+  if (appData) appData.users = users;
+
   const tbody = document.getElementById('usersTableBody');
   tbody.innerHTML = '';
-  users.forEach(u => {
+  users.forEach((u, idx) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><b>${u.username}</b></td>
+      <td><b>${u.email}</b></td>
       <td><span class="badge ${u.role === 'admin' ? 'badge-p1' : 'badge-p3'}">${u.role}</span></td>
-      <td style="color:var(--muted)">${u.created || '—'}</td>
+      <td style="color:var(--muted)">${u.createdAt || '—'}</td>
       <td>
-        <button class="btn-sm" onclick="editUser('${u.username}')">
-          <span class="i18n-zh">編輯</span><span class="i18n-en">Edit</span>
+        <button class="btn-sm" onclick="openEditRole('${u.email}', '${u.role}')">
+          <span class="i18n-zh">變更角色</span><span class="i18n-en">Edit Role</span>
         </button>
-        <button class="btn-sm btn-sm-danger" onclick="deleteUser('${u.username}')" style="margin-left:4px">
+        <button class="btn-sm btn-sm-danger" onclick="deleteUser('${u.email}')" style="margin-left:4px">
           <span class="i18n-zh">刪除</span><span class="i18n-en">Delete</span>
         </button>
       </td>
@@ -1209,43 +1541,71 @@ function renderUsers(users) {
 }
 
 function openAddUser() {
-  document.getElementById('newUsername').value = '';
-  document.getElementById('newPassword').value = '';
+  editingUserEmail = null;
+  document.getElementById('newEmail').value = '';
   document.getElementById('newRole').value = 'viewer';
   document.getElementById('userModal').classList.add('open');
-  setTimeout(() => document.getElementById('newUsername').focus(), 100);
+  setTimeout(() => document.getElementById('newEmail').focus(), 100);
 }
 
 function closeModal() {
   document.getElementById('userModal').classList.remove('open');
 }
 
-function addUser() {
-  const username = document.getElementById('newUsername').value.trim();
+function submitUserModal() {
+  const email = document.getElementById('newEmail').value.trim();
   const role = document.getElementById('newRole').value;
-  if (!username) return;
-  // In real app: POST to /api/users
+  if (!email || !email.includes('@')) {
+    document.getElementById('newEmail').style.borderColor = 'var(--rose)';
+    setTimeout(() => { document.getElementById('newEmail').style.borderColor = ''; }, 2000);
+    return;
+  }
   if (!appData.users) appData.users = [];
-  appData.users.push({ username, role, created: new Date().toISOString().split('T')[0] });
+  const existing = appData.users.findIndex(u => u.email === email);
+  if (existing >= 0) {
+    appData.users[existing].role = role;
+  } else {
+    appData.users.push({ email, role, createdAt: new Date().toISOString().split('T')[0] });
+  }
   renderUsers(appData.users);
   closeModal();
 }
 
-function editUser(username) {
-  alert('Edit user: ' + username + ' (UI placeholder — connect to /api/users PUT)');
+function openEditRole(email, currentRole) {
+  editingUserEmail = email;
+  document.getElementById('editRoleEmail').textContent = email;
+  document.getElementById('editRoleSelect').value = currentRole;
+  document.getElementById('editRoleModal').classList.add('open');
 }
 
-function deleteUser(username) {
-  if (!confirm('Delete user: ' + username + '?')) return;
+function closeEditRoleModal() {
+  document.getElementById('editRoleModal').classList.remove('open');
+  editingUserEmail = null;
+}
+
+function saveEditRole() {
+  if (!editingUserEmail || !appData.users) return;
+  const newRole = document.getElementById('editRoleSelect').value;
+  const idx = appData.users.findIndex(u => u.email === editingUserEmail);
+  if (idx >= 0) appData.users[idx].role = newRole;
+  renderUsers(appData.users);
+  closeEditRoleModal();
+}
+
+function deleteUser(email) {
+  if (!confirm('Delete user: ' + email + '?')) return;
   if (appData.users) {
-    appData.users = appData.users.filter(u => u.username !== username);
+    appData.users = appData.users.filter(u => u.email !== email);
     renderUsers(appData.users);
   }
 }
 
-// Close modal on overlay click
+// Close modals on overlay click
 document.getElementById('userModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
+});
+document.getElementById('editRoleModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditRoleModal();
 });
 
 // ─── Init ───
