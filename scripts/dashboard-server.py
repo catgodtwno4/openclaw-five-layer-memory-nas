@@ -466,7 +466,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     memory = json.load(f)
             except Exception:
                 memory = {}
-        self._send_json(200, {"tasks": tasks, "progress": progress, "memory": memory})
+        self._send_json(200, {"tasks": tasks, "progress": progress, "memory": memory, "users": _load_users()})
 
     # ── Memory Tab API ────────────────────────────────────────────────────────
 
