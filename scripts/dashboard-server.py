@@ -219,6 +219,7 @@ def parse_todo(path):
                 "createdDate": None,
                 "dueDate":     None,
                 "assignee":    None,
+                "description": None,
             }
             tasks.append(current_task)
             continue
@@ -243,6 +244,10 @@ def parse_todo(path):
                     mapped = LABEL_STATUS_MAP.get(status_raw)
                     if mapped:
                         current_task['status'] = mapped
+                # Description line: > 📝 text
+                desc_m = re.search(r'📝\s*(.+)', meta_text)
+                if desc_m:
+                    current_task['description'] = desc_m.group(1).strip()
                 continue
 
             # - [x] or - [ ] subtasks
@@ -252,6 +257,15 @@ def parse_todo(path):
                 current_task["subtasks"].append({"text": done_m.group(1).strip(), "done": True})
             elif todo_m:
                 current_task["subtasks"].append({"text": todo_m.group(1).strip(), "done": False})
+
+    # Overdue detection
+    today = time.strftime("%Y-%m-%d")
+    for t in tasks:
+        due = t.get("dueDate")
+        if due and due < today and t.get("status") not in ("done",):
+            t["isOverdue"] = True
+        else:
+            t["isOverdue"] = False
 
     return tasks
 
@@ -772,6 +786,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         subtasks = body.get("subtasks") or []
         due_date = (body.get("dueDate") or "").strip()
         assignee = (body.get("assignee") or "").strip()
+        description = (body.get("description") or "").strip()
 
         if not title:
             self._send_json(400, {"error": "title is required"}); return
@@ -791,6 +806,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             meta_parts.append(f"👤 {assignee}")
         meta_parts.append("🏷️ 待辦")
         task_lines.append(f"> {' | '.join(meta_parts)}")
+        if description:
+            task_lines.append(f"> 📝 {description}")
         for st in subtasks:
             if isinstance(st, dict):
                 st = st.get("text", "")

@@ -243,6 +243,7 @@ def parse_todo(content):
                 "createdDate": None,
                 "dueDate": None,
                 "assignee": None,
+                "description": None,
                 "isOverdue": False,
             }
             tasks.append(current_task)
@@ -269,6 +270,9 @@ def parse_todo(content):
                         if k == status_raw:
                             current_task['status'] = v
                             break
+                desc_m = re.search(r'📝\s*(.+)', meta_text)
+                if desc_m:
+                    current_task['description'] = desc_m.group(1).strip()
                 continue
 
             # Subtask
@@ -908,6 +912,9 @@ html = r"""<!DOCTYPE html>
   .sys-mini-status { font-size: 11px; }
   .sys-disk-track { background: #0f172a; border-radius: 3px; height: 5px; overflow: hidden; margin-top: 6px; }
   .sys-disk-fill { height: 100%; border-radius: 3px; }
+  .disk-ok  { background: var(--green); }
+  .disk-warn { background: var(--amber); }
+  .disk-err  { background: var(--rose); }
 
   /* ── Task Meta Extras ── */
   .task-date-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; font-size: 11px; color: var(--muted); align-items: center; }
@@ -1015,14 +1022,6 @@ html = r"""<!DOCTYPE html>
         <option value="待處理" selected>待處理 (Pending)</option>
       </select>
     </div>
-    <div class="form-group">
-      <label class="form-label"><span class="i18n-zh">截止日期</span><span class="i18n-en">Due Date</span></label>
-      <input class="form-input" id="newTaskDueDate" type="date">
-    </div>
-    <div class="form-group">
-      <label class="form-label"><span class="i18n-zh">指派者</span><span class="i18n-en">Assignee</span></label>
-      <input class="form-input" id="newTaskAssignee" type="text" placeholder="e.g., scott">
-    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label"><span class="i18n-zh">截止日期</span><span class="i18n-en">Due Date</span></label>
@@ -1035,10 +1034,10 @@ html = r"""<!DOCTYPE html>
     </div>
     <div class="form-group">
       <label class="form-label">
-        <span class="i18n-zh">子任務（每行一項）</span>
-        <span class="i18n-en">Subtasks (one per line)</span>
+        <span class="i18n-zh">任務描述 / 說明</span>
+        <span class="i18n-en">Description</span>
       </label>
-      <textarea class="form-input" id="newTaskSubtasks" rows="4" placeholder="- Subtask 1&#10;- Subtask 2" style="resize:vertical;font-family:inherit"></textarea>
+      <textarea class="form-input" id="newTaskDescription" rows="4" placeholder="任務描述或備註..." style="resize:vertical;font-family:inherit"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeNewTaskModal()">
@@ -1462,11 +1461,12 @@ function selectTask(task, progress) {
       ${task.isOverdue ? '<span class="badge badge-overdue">已延誤</span>' : ''}
       ${total > 0 ? `<span style="font-size:12px;color:var(--muted)">${done}/${total} (${Math.round(done/total*100)}%)</span>` : ''}
     </div>
-    ${task.createdDate || task.dueDate || task.assignee ? `
+    ${task.createdDate || task.dueDate || task.assignee || task.description ? `
       <div class="mem-kv-list">
         ${task.createdDate ? `<div class="mem-kv-row"><span class="mem-kv-key">📅 Created</span><span class="mem-kv-val">${task.createdDate}</span></div>` : ''}
         ${task.dueDate ? `<div class="mem-kv-row"><span class="mem-kv-key">⏰ Due</span><span class="mem-kv-val">${task.dueDate}</span></div>` : ''}
         ${task.assignee ? `<div class="mem-kv-row"><span class="mem-kv-key">👤 Assignee</span><span class="mem-kv-val">${task.assignee}</span></div>` : ''}
+        ${task.description ? `<div class="mem-kv-row"><span class="mem-kv-key">📝 Description</span><span class="mem-kv-val" style="max-width:300px;word-break:break-word">${task.description}</span></div>` : ''}
       </div>
     ` : ''}
 
@@ -1783,6 +1783,124 @@ function renderMemMid(key) {
   }
 }
 
+// ─── Memory Detail Renderers ───
+function shortModel(model) {
+  if (!model || model === 'unknown' || model === '—') return '—';
+  const m = model.replace('openai/', '');
+  if (m.length > 24) return m.substring(0, 22) + '…';
+  return m;
+}
+
+function renderDetailKV(title, kvPairs) {
+  const el = document.getElementById('memRightContent');
+  const hdr = document.getElementById('memRightHeader');
+  hdr.textContent = title;
+  el.innerHTML = `
+    <div class="mem-detail-content">
+      <div class="mem-detail-title">${title}</div>
+      <div class="mem-kv-list">
+        ${kvPairs.map(kv => `
+          <div class="mem-kv-row">
+            <span class="mem-kv-key">${kv.k}</span>
+            <span class="mem-kv-val">${kv.v ?? '—'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderDetailL0File(fname) {
+  const el = document.getElementById('memRightContent');
+  const hdr = document.getElementById('memRightHeader');
+  hdr.textContent = fname;
+  el.innerHTML = '<div class="mem-detail-content"><div class="mem-detail-title">' + fname + '</div><div style="color:var(--muted);font-size:12px">Loading...</div></div>';
+  fetch('/api/memory/file?path=' + encodeURIComponent(fname))
+    .then(r => r.json())
+    .then(data => {
+      el.innerHTML = `
+        <div class="mem-detail-content">
+          <div class="mem-detail-title">📄 ${data.name || fname}</div>
+          <div class="mem-detail-meta">${data.truncated ? '(truncated to 2000 chars)' : 'Full content'}</div>
+          <div class="mem-detail-preview">${(data.content || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        </div>
+      `;
+    })
+    .catch(e => {
+      el.innerHTML = '<div class="mem-detail-content"><div style="color:var(--rose)">Error loading file: ' + e.message + '</div></div>';
+    });
+}
+
+function renderDetailL2plus(d) {
+  const el = document.getElementById('memRightContent');
+  const hdr = document.getElementById('memRightHeader');
+  hdr.textContent = 'MemOS Details';
+  const mdlCls = modelBadgeCls(d.llm_model);
+  el.innerHTML = `
+    <div class="mem-detail-content">
+      <div class="mem-detail-title">🌐 MemOS 知識圖譜</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">API Endpoint</span><span class="mem-kv-val">${d.api || '—'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Status</span><span class="mem-kv-val"><span class="badge ${d.status==='ok'?'badge-ok':'badge-err'}">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Search Latency</span><span class="mem-kv-val">${d.search_latency_ms >= 0 ? d.search_latency_ms + 'ms' : 'N/A'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge ${mdlCls}" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val"><span class="badge ${d.neo4j==='ok'?'badge-ok':'badge-err'}">${d.neo4j||'—'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val"><span class="badge ${d.qdrant==='ok'?'badge-ok':'badge-err'}">${d.qdrant||'—'}</span></span></div>
+      </div>
+      ${d.search_latency_ms >= 0 ? latencyGauge(d.search_latency_ms) : ''}
+    </div>
+  `;
+}
+
+function renderDetailL4(d) {
+  const el = document.getElementById('memRightContent');
+  const hdr = document.getElementById('memRightHeader');
+  hdr.textContent = 'Cognee Details';
+  const mdlCls = modelBadgeCls(d.llm_model);
+  el.innerHTML = `
+    <div class="mem-detail-content">
+      <div class="mem-detail-title">🧠 Cognee 深度理解</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">API Endpoint</span><span class="mem-kv-val">${d.api || '—'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Status</span><span class="mem-kv-val"><span class="badge ${d.status==='ok'?'badge-ok':'badge-err'}">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Search Latency</span><span class="mem-kv-val">${d.search_latency_ms >= 0 ? d.search_latency_ms + 'ms' : 'N/A'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge ${mdlCls}" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
+      </div>
+      ${d.search_latency_ms >= 0 ? latencyGauge(d.search_latency_ms) : ''}
+    </div>
+  `;
+}
+
+function renderDetailSystem(m) {
+  const el = document.getElementById('memRightContent');
+  const hdr = document.getElementById('memRightHeader');
+  hdr.textContent = 'System Info';
+  const gw = m.gateway || {};
+  const disk = m.disk || {};
+  const rootPct = parseInt(disk.root || '0') || 0;
+  const usersPct = parseInt(disk.users || '0') || 0;
+  el.innerHTML = `
+    <div class="mem-detail-content">
+      <div class="mem-detail-title">⚙ System Overview</div>
+      <div class="mem-kv-list">
+        <div class="mem-kv-row"><span class="mem-kv-key">Gateway</span><span class="mem-kv-val"><span class="badge ${gw.status==='ok'?'badge-ok':'badge-warn'}">${gw.status==='ok'?'✓ OK':'⚠ '+gw.critical_issues+' issues'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Disk /</span><span class="mem-kv-val">${disk.root || '—'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Disk /Users</span><span class="mem-kv-val">${disk.users || '—'}</span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val"><span class="badge ${m.l2plus?.neo4j==='ok'?'badge-ok':'badge-err'}">${m.l2plus?.neo4j||'—'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val"><span class="badge ${m.l2plus?.qdrant==='ok'?'badge-ok':'badge-err'}">${m.l2plus?.qdrant||'—'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">MemOS API</span><span class="mem-kv-val"><span class="badge ${m.l2plus?.status==='ok'?'badge-ok':'badge-err'}">${m.l2plus?.status||'—'}</span></span></div>
+        <div class="mem-kv-row"><span class="mem-kv-key">Cognee API</span><span class="mem-kv-val"><span class="badge ${m.l4?.status==='ok'?'badge-ok':'badge-err'}">${m.l4?.status||'—'}</span></span></div>
+      </div>
+      <div style="margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Disk / (${disk.root || '—'})</div>
+        <div class="sys-disk-track"><div class="sys-disk-fill ${rootPct>85?'disk-err':rootPct>70?'disk-warn':'disk-ok'}" style="width:${rootPct}%"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Disk /Users (${disk.users || '—'})</div>
+        <div class="sys-disk-track"><div class="sys-disk-fill ${usersPct>85?'disk-err':usersPct>70?'disk-warn':'disk-ok'}" style="width:${usersPct}%"></div></div>
+      </div>
+    </div>
+  `;
+}
+
 // ─── Users ───
 let editingUserEmail = null;
 
@@ -1888,7 +2006,7 @@ function openNewTaskModal() {
   document.getElementById('newTaskCategory').value = '待處理';
   document.getElementById('newTaskDueDate').value = '';
   document.getElementById('newTaskAssignee').value = '';
-  document.getElementById('newTaskSubtasks').value = '';
+  document.getElementById('newTaskDescription').value = '';
   document.getElementById('newTaskModal').classList.add('open');
   setTimeout(() => document.getElementById('newTaskTitle').focus(), 100);
 }
@@ -1903,7 +2021,7 @@ function submitNewTask() {
   const category = document.getElementById('newTaskCategory').value;
   const dueDate = document.getElementById('newTaskDueDate').value;
   const assignee = document.getElementById('newTaskAssignee').value.trim();
-  const subtasksRaw = document.getElementById('newTaskSubtasks').value;
+  const description = document.getElementById('newTaskDescription').value.trim();
 
   if (!title) {
     document.getElementById('newTaskTitle').style.borderColor = 'var(--rose)';
@@ -1911,11 +2029,7 @@ function submitNewTask() {
     return;
   }
 
-  const subtasks = subtasksRaw.split('\n')
-    .map(s => s.trim().replace(/^[-*]\s*/, ''))
-    .filter(Boolean);
-
-  const payload = { title, priority, category, subtasks, dueDate: dueDate || undefined, assignee: assignee || undefined };
+  const payload = { title, priority, category, subtasks: [], dueDate: dueDate || undefined, assignee: assignee || undefined, description: description || undefined };
 
   fetch('/api/tasks', {
     method: 'POST',
@@ -1943,7 +2057,8 @@ function addTaskLocally(payload) {
     priority: payload.priority,
     status: statusMap[payload.category] || 'pending',
     category: payload.category,
-    subtasks: payload.subtasks.map(st => ({ text: st, done: false })),
+    subtasks: [],
+    description: payload.description || null,
     dueDate: payload.dueDate || null,
     assignee: payload.assignee || null,
     createdDate: new Date().toISOString().split('T')[0],
