@@ -325,6 +325,16 @@ def _neo4j_query(statement):
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
+
+    def end_headers(self):
+        """Add cache headers based on path."""
+        path = self.path.split('?')[0] if hasattr(self, 'path') else ''
+        if path.startswith('/api/'):
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        elif path.endswith('.html') or path == '/' or path == '':
+            self.send_header("Cache-Control", "public, max-age=600, s-maxage=600")
+        super().end_headers()
+
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=SERVE_DIR, **kw)
 
@@ -340,6 +350,11 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             elif sess:
                 del sessions[token.value]
         # Auto-login via Cloudflare Access (CF-Access-Authenticated-User-Email header)
+        # Bypass auth for localhost/proxy requests (Next.js proxy)
+        if self.client_address[0] in ('127.0.0.1', '::1', 'localhost'):
+            forwarded = self.headers.get("X-Forwarded-For", "")
+            if not forwarded:
+                return {"user": "system", "role": "admin", "expires": time.time() + 86400, "ip": "localhost"}
         cf_email = self.headers.get("Cf-Access-Authenticated-User-Email", "")
         if cf_email:
             # Look up user by email in users.json to get their role
@@ -1015,6 +1030,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def _send_json(self, code, data):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
