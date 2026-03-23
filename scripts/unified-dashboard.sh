@@ -556,9 +556,13 @@ html = r"""<!DOCTYPE html>
   /* ── Tasks Layout ── */
   .tasks-layout { display: flex; flex-direction: column; gap: 12px; }
   .tasks-stats-row {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
   }
   .tasks-panels {
     display: flex;
@@ -624,21 +628,18 @@ html = r"""<!DOCTYPE html>
   }
   .panel-empty div { font-size: 28px; }
 
-  /* ── Compact Stats ── */
-  .stat-mini {
-    text-align: center;
-    padding: 10px 4px;
-    border-radius: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-  }
-  .stat-mini-num { font-size: 20px; font-weight: 800; line-height: 1.2; }
-  .stat-mini-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-top: 2px; }
-  .stat-mini.green .stat-mini-num { color: var(--green); }
-  .stat-mini.blue .stat-mini-num { color: var(--blue); }
-  .stat-mini.amber .stat-mini-num { color: var(--amber); }
-  .stat-mini.rose .stat-mini-num { color: var(--rose); }
-  .stat-mini.purple .stat-mini-num { color: #a855f7; }
+  /* ── Compact Inline Stats ── */
+  .stats-title { font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .stats-sep { color: var(--border); font-size: 16px; }
+  .stat-inline { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .stat-inline-label { color: var(--muted); }
+  .stat-inline-num { font-weight: 800; }
+  .stat-inline.green .stat-inline-num { color: var(--green); }
+  .stat-inline.blue .stat-inline-num { color: var(--blue); }
+  .stat-inline.amber .stat-inline-num { color: var(--amber); }
+  .stat-inline.rose .stat-inline-num { color: var(--rose); }
+  .stat-inline.purple .stat-inline-num { color: #a855f7; }
+  .stat-dot { color: var(--muted); font-size: 10px; }
 
   /* ── Compact Task Card (left panel) ── */
   .task-card-compact {
@@ -1093,7 +1094,9 @@ html = r"""<!DOCTYPE html>
     .tasks-panels > div {
       max-height: 50vh;
     }
-    .tasks-stats-row { grid-template-columns: repeat(3, 1fr); }
+    .tasks-stats-row { flex-wrap: wrap; gap: 8px; padding: 6px 10px; }
+    .stats-title { font-size: 12px; }
+    .stat-inline { font-size: 11px; }
     .memory-panels {
       flex-direction: column;
       height: auto;
@@ -1207,43 +1210,39 @@ html = r"""<!DOCTYPE html>
 <!-- Tab: Tasks -->
 <div class="tab-content active" id="tab-tasks">
   <div class="page tasks-layout">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px" id="tasksHeader">
-      <div style="font-size:15px;font-weight:700">
-        <span class="i18n-zh">📋 任務清單</span>
-        <span class="i18n-en">📋 Task List</span>
-      </div>
-      <button class="btn-primary" id="newTaskBtn" onclick="openNewTaskModal()" style="display:none">
-        <span class="i18n-zh">➕ 新增任務</span>
-        <span class="i18n-en">➕ New Task</span>
-      </button>
-    </div>
-
-    <!-- Stats Summary (full width, above panels) -->
+    <!-- Stats Summary Bar (compact one-line) -->
     <div class="tasks-stats-row" id="statsCompact">
-      <div class="stat-mini"><div class="stat-mini-num" id="statTotal">—</div><div class="stat-mini-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
-      <div class="stat-mini green"><div class="stat-mini-num" id="statDone">—</div><div class="stat-mini-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
-      <div class="stat-mini blue"><div class="stat-mini-num" id="statInProgress">—</div><div class="stat-mini-label"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></div></div>
-      <div class="stat-mini amber"><div class="stat-mini-num" id="statPending">—</div><div class="stat-mini-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
-      <div class="stat-mini rose"><div class="stat-mini-num" id="statBlocked">—</div><div class="stat-mini-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
-      <div class="stat-mini purple"><div class="stat-mini-num" id="statRate">—</div><div class="stat-mini-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
-    </div>
-
-    <!-- Filter Bar (full width, above panels) -->
-    <div class="filter-bar" id="filterBar">
-      <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
-      <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
-      <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
-      <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Todo</span></button>
-      <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">已延誤</span><span class="i18n-en">Late</span></button>
-      <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Block</span></button>
+      <span class="stats-title"><span class="i18n-zh">📊 統計概要</span><span class="i18n-en">📊 Summary</span></span>
+      <span class="stats-sep">|</span>
+      <span class="stat-inline"><span class="stat-inline-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></span> <span class="stat-inline-num" id="statTotal">—</span></span>
+      <span class="stat-dot">·</span>
+      <span class="stat-inline green"><span class="stat-inline-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></span> <span class="stat-inline-num" id="statDone">—</span></span>
+      <span class="stat-dot">·</span>
+      <span class="stat-inline blue"><span class="stat-inline-label"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></span> <span class="stat-inline-num" id="statInProgress">—</span></span>
+      <span class="stat-dot">·</span>
+      <span class="stat-inline amber"><span class="stat-inline-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></span> <span class="stat-inline-num" id="statPending">—</span></span>
+      <span class="stat-dot">·</span>
+      <span class="stat-inline rose"><span class="stat-inline-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></span> <span class="stat-inline-num" id="statBlocked">—</span></span>
+      <span class="stat-dot">·</span>
+      <span class="stat-inline purple"><span class="stat-inline-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></span> <span class="stat-inline-num" id="statRate">—</span></span>
+      <span style="flex:1"></span>
+      <button class="btn-primary" id="newTaskBtn" onclick="openNewTaskModal()" style="display:none;font-size:11px;padding:4px 10px">
+        <span class="i18n-zh">➕ 新增</span>
+        <span class="i18n-en">➕ New</span>
+      </button>
     </div>
 
     <!-- Three Equal Panels -->
     <div class="tasks-panels" id="tasksThreePanel">
-      <!-- Left Panel: Main Task List -->
+      <!-- Left Panel: Filter buttons + Main Task List -->
       <div>
-        <div class="panel-header">
-          <span class="i18n-zh">主任務</span><span class="i18n-en">Tasks</span>
+        <div class="panel-header" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px 8px" id="filterBar">
+          <button class="filter-btn active" onclick="filterTasks('all', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
+          <button class="filter-btn" onclick="filterTasks('in_progress', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
+          <button class="filter-btn" onclick="filterTasks('done', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
+          <button class="filter-btn" onclick="filterTasks('pending', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">待辦</span><span class="i18n-en">Todo</span></button>
+          <button class="filter-btn" onclick="filterTasks('overdue', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">已延誤</span><span class="i18n-en">Late</span></button>
+          <button class="filter-btn" onclick="filterTasks('blocked', this)" style="padding:3px 8px;font-size:10px;border-radius:10px"><span class="i18n-zh">阻塞</span><span class="i18n-en">Block</span></button>
         </div>
         <div id="taskList">
           <!-- Compact task cards injected here -->
@@ -1585,14 +1584,20 @@ function renderTasks(tasks, progress) {
     card.className = `task-card-compact status-${statusClass} fade-in${isSelected ? ' selected' : ''}`;
     card.style.animationDelay = (idx * 0.03) + 's';
     card.dataset.taskId = task.id;
+    const dateParts = [];
+    if (task.createdDate) dateParts.push('📅' + task.createdDate);
+    if (task.dueDate) dateParts.push('⏰' + task.dueDate);
+    if (task.assignee) dateParts.push('👤' + task.assignee);
     card.innerHTML = `
       <div class="tc-row1">
         <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}" style="font-size:9px;padding:1px 5px">${task.priority || 'P3'}</span>
         <span class="tc-title">${task.title}</span>
-        ${statusBadgeMini(task.status)}
       </div>
-      ${total > 0 ? '<div class="tc-row2"><span>' + done + '/' + total + '</span></div>' : ''}
-      ${total > 0 ? '<div class="progress-wrap"><div class="progress-fill ' + progressCls + '" style="width:' + pct + '%"></div></div>' : ''}
+      ${dateParts.length > 0 ? '<div class="tc-row2">' + dateParts.join(' <span style="opacity:.4">|</span> ') + '</div>' : ''}
+      <div class="tc-row2" style="margin-top:3px">
+        ${statusBadgeMini(task.status)}
+        ${total > 0 ? '<span style="flex:1"><div class="progress-wrap" style="margin:0"><div class="progress-fill ' + progressCls + '" style="width:' + pct + '%"></div></div></span><span style="font-size:9px;color:var(--muted)">' + done + '/' + total + '</span>' : ''}
+      </div>
     `;
     card.onclick = () => selectTask(task, progress);
     listEl.appendChild(card);
@@ -1657,7 +1662,10 @@ function selectTask(task, progress) {
         ${task.subtasks.map((s,si) => `
           <div class="subtask-row${s.done ? ' done' : ''}" data-subtask-done="${s.done}" data-subtask-idx="${si}" onclick="selectSubtask(${si})" style="cursor:pointer">
             <span class="st-icon">${s.done ? '☑' : '☐'}</span>
-            <span class="st-text${s.done ? ' done-text' : ''}">${s.text}</span>
+            <div style="flex:1;min-width:0">
+              <span class="st-text${s.done ? ' done-text' : ''}">${s.text}</span>
+              ${s.assignee ? '<div style="font-size:9px;color:var(--muted);margin-top:1px">👤 ' + s.assignee + '</div>' : ''}
+            </div>
           </div>
         `).join('')}
       </div>
@@ -1674,28 +1682,16 @@ function selectTask(task, progress) {
   const dotColors = ['pt-dot-blue', 'pt-dot-green', 'pt-dot-amber'];
 
   rightContent.innerHTML = `
-    <!-- Section 1: 主任務資訊 -->
-    <div class="right-section">
-      <div class="right-section-title"><span class="i18n-zh">📋 主任務資訊</span><span class="i18n-en">📋 Task Info</span></div>
-      <div class="task-info-grid" style="padding:8px 14px">
-        <span class="tig-key">📊 <span class="i18n-zh">優先級</span><span class="i18n-en">Priority</span></span><span class="tig-val">${task.priority || 'P3'}</span>
-        <span class="tig-key">🏷️ <span class="i18n-zh">狀態</span><span class="i18n-en">Status</span></span><span class="tig-val">${statusBadge(task.status)}</span>
-        ${task.createdDate ? '<span class="tig-key">📅 <span class="i18n-zh">建立日期</span><span class="i18n-en">Created</span></span><span class="tig-val">' + task.createdDate + '</span>' : ''}
-        ${task.dueDate ? '<span class="tig-key">⏰ <span class="i18n-zh">預計完成</span><span class="i18n-en">Due Date</span></span><span class="tig-val">' + task.dueDate + '</span>' : ''}
-        ${task.assignee ? '<span class="tig-key">👤 <span class="i18n-zh">負責人</span><span class="i18n-en">Assignee</span></span><span class="tig-val">' + task.assignee + '</span>' : ''}
-      </div>
-      ${task.description ? '<div class="task-info-desc" style="padding:8px 14px;border-top:1px solid var(--border)">📝 ' + task.description + '</div>' : ''}
-    </div>
-    <!-- Section 2: 子任務資訊 -->
-    <div class="right-section" id="subtaskInfoSection">
-      <div class="right-section-title"><span class="i18n-zh">📝 子任務資訊</span><span class="i18n-en">📝 Subtask Info</span></div>
-      <div id="subtaskInfoContent" style="padding:14px;color:var(--muted);font-size:12px;text-align:center">
-        <span class="i18n-zh">點擊中間子任務查看詳情</span><span class="i18n-en">Click a subtask to view details</span>
+    <!-- Section 1: 主任務描述 (or subtask info when clicked) -->
+    <div class="right-section" id="rightDescSection">
+      <div class="right-section-title" id="rightDescTitle"><span class="i18n-zh">📝 主任務描述</span><span class="i18n-en">📝 Description</span></div>
+      <div id="rightDescContent" style="padding:12px 14px;font-size:12px;line-height:1.7;color:var(--text)">
+        ${task.description ? task.description : '<span style="color:var(--muted)"><span class="i18n-zh">無描述</span><span class="i18n-en">No description</span></span>'}
       </div>
     </div>
-    <!-- Section 3: 進度記錄 -->
+    <!-- Section 2: 進度記錄 -->
     <div class="right-section" style="border-bottom:none">
-      <div class="right-section-title"><span class="i18n-zh">📊 進度記錄</span><span class="i18n-en">📊 Progress</span></div>
+      <div class="right-section-title"><span class="i18n-zh">📋 進度記錄</span><span class="i18n-en">📋 Progress</span></div>
       ${related.length > 0 ? `
         <div class="progress-timeline" style="border-top:none">
           ${related.map((e, i) => `
@@ -1729,12 +1725,16 @@ function selectSubtask(idx) {
   const rows = document.querySelectorAll('#subtaskList .subtask-row');
   if (rows[idx]) rows[idx].style.background = 'rgba(99,102,241,.12)';
 
-  const infoEl = document.getElementById('subtaskInfoContent');
-  if (!infoEl) return;
-  infoEl.innerHTML = `
-    <div style="padding:4px 0;text-align:left">
-      <div style="font-size:13px;font-weight:600;margin-bottom:6px">${s.done ? '☑' : '☐'} ${s.text}</div>
-      <div style="display:flex;gap:8px;align-items:center">
+  // Update right panel top section to show subtask info
+  const descTitle = document.getElementById('rightDescTitle');
+  const descContent = document.getElementById('rightDescContent');
+  if (!descTitle || !descContent) return;
+  descTitle.innerHTML = '<span class="i18n-zh">📝 子任務描述</span><span class="i18n-en">📝 Subtask Detail</span>';
+  descContent.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
+      <span style="font-size:16px">${s.done ? '☑' : '☐'}</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${s.text}</div>
         <span class="badge ${s.done ? 'badge-ok' : 'badge-warn'}" style="font-size:10px">
           <span class="i18n-zh">${s.done ? '已完成' : '待辦'}</span>
           <span class="i18n-en">${s.done ? 'Done' : 'Pending'}</span>
