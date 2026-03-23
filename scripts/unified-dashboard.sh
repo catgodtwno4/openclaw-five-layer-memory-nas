@@ -189,13 +189,14 @@ PYEOF
 # ─── Collect Task Data ───
 collect_tasks() {
     python3 << 'PYEOF'
-import json, re, time
+import json, re, time, datetime
 from pathlib import Path
 
 TODO_PATH = Path.home() / ".openclaw-data" / "shared-data" / "todo.md"
 PROGRESS_PATH = Path.home() / ".openclaw-data" / "shared-data" / "progress-log.md"
 
 def parse_todo(content):
+    """Parse todo.md with new metadata format support."""
     tasks = []
     current_section = None
     current_task = None
@@ -208,19 +209,18 @@ def parse_todo(content):
         "Pending": "pending",
         "Done": "done",
         "Completed": "done",
+        "阻塞": "blocked",
+        "Blocked": "blocked",
     }
 
     lines = content.split('\n')
-    i = 0
-    while i < lines.items if hasattr(lines, 'items') else range(len(lines)):
-        i = 0
-        break
 
     for line in lines:
         # Section header (## ...)
         m = re.match(r'^##\s+(.+)', line)
         if m:
             sec_name = m.group(1).strip()
+            current_section = None
             for k, v in section_map.items():
                 if k in sec_name:
                     current_section = v
@@ -239,26 +239,52 @@ def parse_todo(content):
                 "title": title,
                 "status": current_section or "pending",
                 "subtasks": [],
-                "category": "General"
+                "category": "General",
+                "createdDate": None,
+                "dueDate": None,
+                "assignee": None,
+                "isOverdue": False,
             }
             tasks.append(current_task)
             continue
 
-        # Subtask
         if current_task is not None:
+            # Metadata line: > 📅 2026-03-23 | ⏰ 2026-03-25 | 👤 scott | 🏷️ 進行中
+            m = re.match(r'^>\s*(.+)', line)
+            if m:
+                meta_text = m.group(1)
+                cd = re.search(r'📅\s*(\d{4}-\d{2}-\d{2})', meta_text)
+                if cd:
+                    current_task['createdDate'] = cd.group(1)
+                dd = re.search(r'⏰\s*(\d{4}-\d{2}-\d{2})', meta_text)
+                if dd:
+                    current_task['dueDate'] = dd.group(1)
+                av = re.search(r'👤\s*(\S+)', meta_text)
+                if av:
+                    current_task['assignee'] = av.group(1)
+                sv = re.search(r'🏷️\s*(.+?)(?:\s*\||\s*$)', meta_text)
+                if sv:
+                    status_raw = sv.group(1).strip()
+                    for k, v in section_map.items():
+                        if k == status_raw:
+                            current_task['status'] = v
+                            break
+                continue
+
+            # Subtask
             m = re.match(r'^\s*-\s+\[([ xX])\]\s+(.+)', line)
             if m:
                 done = m.group(1).lower() == 'x'
                 text = m.group(2).strip()
                 current_task["subtasks"].append({"done": done, "text": text})
                 continue
-            # Note line (starts with -)
-            m = re.match(r'^\s*-\s+\*\*(.+?)\*\*\s*[:：]\s*(.+)', line)
-            if m:
-                key = m.group(1).strip()
-                if key == "category" or key == "分類":
-                    current_task["category"] = m.group(2).strip()
-                continue
+
+    # Check overdue: dueDate < today and status != done
+    today = datetime.date.today().isoformat()
+    for t in tasks:
+        due = t.get('dueDate')
+        if due and due < today and t.get('status') != 'done':
+            t['isOverdue'] = True
 
     # Guess category from title keywords
     cat_map = [
@@ -313,8 +339,7 @@ else:
     result["progress"] = []
 
 result["users"] = [
-    {"username": "scott", "role": "admin", "created": "2026-03-22"},
-    {"username": "happy", "role": "agent", "created": "2026-03-22"},
+    {"email": "scott@example.com", "role": "admin", "createdAt": "2026-03-22"},
 ]
 
 print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -435,6 +460,43 @@ html = r"""<!DOCTYPE html>
   .tab-content.active { display: block; }
   .page { padding: 16px; max-width: 1400px; margin: 0 auto; }
 
+  /* ── Stats Row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    text-align: center;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .progress-circle {
+    width: 60px; height: 60px; margin: 0 auto;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px;
+    background: conic-gradient(var(--green) 0deg, var(--green) var(--conic-angle, 0deg), var(--border) var(--conic-angle, 0deg), var(--border) 360deg);
+    margin-bottom: 8px;
+  }
+  .progress-circle-inner { width: 54px; height: 54px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+
+  /* ── Filter Bar ── */
+  .filter-bar {
+    display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    cursor: pointer; font-size: 12px; font-weight: 500;
+    transition: all .2s;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
   /* ── Loading / Error ── */
   .loading-overlay {
     position: fixed; inset: 0; background: rgba(15,23,42,0.85);
@@ -478,6 +540,7 @@ html = r"""<!DOCTYPE html>
   .badge-err { background: rgba(244,63,94,.15); color: #fb7185; border: 1px solid rgba(244,63,94,.3); }
   .badge-layer { background: rgba(99,102,241,.2); color: var(--accent-light); border: 1px solid rgba(99,102,241,.35); }
   .badge-cat { background: rgba(59,130,246,.15); color: #60a5fa; border: 1px solid rgba(59,130,246,.3); font-size: 10px; }
+  .badge-overdue { background: rgba(244,63,94,.15); color: #fb7185; border: 1px solid rgba(244,63,94,.3); }
 
   /* ── Progress bar ── */
   .progress-wrap { background: #0f172a; border-radius: 4px; height: 4px; overflow: hidden; }
@@ -491,7 +554,7 @@ html = r"""<!DOCTYPE html>
     display: grid;
     grid-template-columns: 40% 60%;
     gap: 16px;
-    height: calc(100vh - 84px);
+    height: calc(100vh - 200px);
   }
   .task-list-panel {
     overflow-y: auto;
@@ -516,9 +579,12 @@ html = r"""<!DOCTYPE html>
   .task-card.status-done { border-left-color: var(--green); }
   .task-card.status-in_progress { border-left-color: var(--blue); }
   .task-card.status-pending { border-left-color: var(--amber); }
+  .task-card.status-blocked { border-left-color: var(--rose); }
+  .task-card.status-overdue { border-left-color: var(--rose); background: rgba(244,63,94,.04); }
   .task-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .task-title { font-weight: 600; font-size: 13px; flex: 1; }
-  .task-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .task-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .task-dates { font-size: 10px; color: var(--muted); }
   .task-progress-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 
   /* Detail panel */
@@ -541,7 +607,9 @@ html = r"""<!DOCTYPE html>
     width: 18px; height: 18px; border-radius: 5px;
     border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px;
     display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .2s;
   }
+  .subtask-check:hover { border-color: var(--accent); }
   .subtask-check.checked { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 11px; }
   .subtask-text { font-size: 13px; line-height: 1.5; }
   .subtask-text.done-text { text-decoration: line-through; color: var(--muted); }
@@ -673,27 +741,6 @@ html = r"""<!DOCTYPE html>
   .gauge-warn { background: var(--amber); }
   .gauge-err { background: var(--rose); }
 
-  /* System status row */
-  .sys-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-  }
-  .sys-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px;
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  .sys-icon { font-size: 20px; margin-bottom: 4px; }
-  .sys-label { font-size: 11px; color: var(--muted); }
-  .sys-value { font-size: 18px; font-weight: 700; }
-  .sys-sub { font-size: 11px; color: var(--muted); }
-  .disk-track { background: #0f172a; border-radius: 3px; height: 3px; overflow: hidden; margin-top: 6px; }
-  .disk-fill { height: 100%; border-radius: 3px; }
-  .disk-ok { background: var(--green); }
-  .disk-warn { background: var(--amber); }
-  .disk-err { background: var(--rose); }
-
   /* ── Tab 3: Users ── */
   .users-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .users-title { font-size: 16px; font-weight: 700; }
@@ -788,6 +835,91 @@ html = r"""<!DOCTYPE html>
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
   .fade-in { animation: fadeIn .3s ease both; }
 
+  /* ── Stats Cards ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(3,1fr); } }
+  @media (max-width: 560px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 10px; text-align: center;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .stat-card.green  { border-color: rgba(34,197,94,.4);  background: rgba(34,197,94,.07); }
+  .stat-card.blue   { border-color: rgba(59,130,246,.4); background: rgba(59,130,246,.07); }
+  .stat-card.amber  { border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.07); }
+  .stat-card.rose   { border-color: rgba(244,63,94,.4);  background: rgba(244,63,94,.07); }
+  .stat-card.purple { border-color: rgba(168,85,247,.4); background: rgba(168,85,247,.07); }
+  .stat-num { font-size: 22px; font-weight: 800; line-height: 1.1; margin-bottom: 2px; }
+  .stat-label { font-size: 11px; color: var(--muted); }
+  .stat-card.green  .stat-num { color: var(--green); }
+  .stat-card.blue   .stat-num { color: var(--blue); }
+  .stat-card.amber  .stat-num { color: var(--amber); }
+  .stat-card.rose   .stat-num { color: var(--rose); }
+  .stat-card.purple .stat-num { color: #a855f7; }
+
+  /* ── Filter Bar ── */
+  .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filter-btn {
+    padding: 5px 12px; border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    cursor: pointer; font-size: 12px; transition: all .15s;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+  /* ── Token Injection Bar ── */
+  .inject-bar { background: #0f172a; border-radius: 4px; height: 6px; overflow: hidden; margin: 6px 0; }
+  .inject-fill { height: 100%; border-radius: 4px; transition: width .6s; }
+  .inject-ok   { background: linear-gradient(90deg, #6366f1, #818cf8); }
+  .inject-warn { background: linear-gradient(90deg, var(--amber), #fcd34d); }
+  .inject-hot  { background: linear-gradient(90deg, var(--rose), #fb923c); }
+  .inject-meta { font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 6px; }
+
+  /* ── LLM Model Badge ── */
+  .badge-anthropic { background: rgba(255,160,50,.12); color: #fb923c; border: 1px solid rgba(255,160,50,.3); }
+  .badge-minimax   { background: rgba(168,85,247,.12); color: #c084fc; border: 1px solid rgba(168,85,247,.3); }
+  .badge-openai    { background: rgba(34,197,94,.12);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+
+  /* ── Latency Chart ── */
+  .latency-chart-section { margin-top: 16px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .latency-chart-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px; }
+  .latency-chart { display: flex; align-items: flex-end; gap: 16px; height: 80px; }
+  .lc-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .lc-bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; }
+  .lc-bar-ok   { background: linear-gradient(180deg, #4ade80, #22c55e); }
+  .lc-bar-warn { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
+  .lc-bar-err  { background: linear-gradient(180deg, #fb7185, #f43f5e); }
+  .lc-label { font-size: 10px; color: var(--muted); text-align: center; margin-top: 4px; }
+  .lc-val   { font-size: 10px; font-weight: 700; }
+
+  /* ── System Cards Row (Memory Tab) ── */
+  .sys-cards-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 16px; }
+  @media (max-width: 900px) { .sys-cards-row { grid-template-columns: repeat(2,1fr); } }
+  .sys-mini-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .sys-mini-title { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .sys-mini-val { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .sys-mini-status { font-size: 11px; }
+  .sys-disk-track { background: #0f172a; border-radius: 3px; height: 5px; overflow: hidden; margin-top: 6px; }
+  .sys-disk-fill { height: 100%; border-radius: 3px; }
+
+  /* ── Task Meta Extras ── */
+  .task-date-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; font-size: 11px; color: var(--muted); align-items: center; }
+  .badge-overdue   { background: rgba(244,63,94,.15); color: #fb7185; border: 1px solid rgba(244,63,94,.3); font-size:10px; padding:1px 7px; border-radius:4px; font-weight:600; }
+  .badge-assignee  { background: rgba(99,102,241,.12); color: #a5b4fc; border: 1px solid rgba(99,102,241,.25); font-size:10px; padding:1px 7px; border-radius:4px; }
+
+  /* ── Subtask Filter ── */
+  .subtask-filter { display: flex; gap: 6px; margin-bottom: 10px; }
+  .subtask-filter-btn { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; transition: all .15s; }
+  .subtask-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .subtask-filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
   /* i18n */
   [data-lang="en"] .i18n-zh { display: none; }
   [data-lang="zh"] .i18n-en { display: none; }
@@ -812,11 +944,11 @@ html = r"""<!DOCTYPE html>
       border-bottom: 1px solid var(--border);
     }
     .mem-right-panel { min-height: 300px; }
-    .sys-row { grid-template-columns: repeat(2, 1fr); }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
     .nav-time { display: none; }
   }
   @media (max-width: 480px) {
-    .sys-row { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr; }
   }
 
   /* Scrollbar */
@@ -884,6 +1016,24 @@ html = r"""<!DOCTYPE html>
       </select>
     </div>
     <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">截止日期</span><span class="i18n-en">Due Date</span></label>
+      <input class="form-input" id="newTaskDueDate" type="date">
+    </div>
+    <div class="form-group">
+      <label class="form-label"><span class="i18n-zh">指派者</span><span class="i18n-en">Assignee</span></label>
+      <input class="form-input" id="newTaskAssignee" type="text" placeholder="e.g., scott">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label"><span class="i18n-zh">截止日期</span><span class="i18n-en">Due Date</span></label>
+        <input class="form-input" id="newTaskDueDate" type="date">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label"><span class="i18n-zh">負責人</span><span class="i18n-en">Assignee</span></label>
+        <input class="form-input" id="newTaskAssignee" type="text" placeholder="@username">
+      </div>
+    </div>
+    <div class="form-group">
       <label class="form-label">
         <span class="i18n-zh">子任務（每行一項）</span>
         <span class="i18n-en">Subtasks (one per line)</span>
@@ -914,6 +1064,27 @@ html = r"""<!DOCTYPE html>
         <span class="i18n-en">➕ New Task</span>
       </button>
     </div>
+
+    <!-- Stats Summary Cards -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="stat-num" id="statTotal">—</div><div class="stat-label"><span class="i18n-zh">總任務</span><span class="i18n-en">Total</span></div></div>
+      <div class="stat-card green"><div class="stat-num" id="statDone">—</div><div class="stat-label"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></div></div>
+      <div class="stat-card blue"><div class="stat-num" id="statInProgress">—</div><div class="stat-label"><span class="i18n-zh">進行中</span><span class="i18n-en">In Progress</span></div></div>
+      <div class="stat-card amber"><div class="stat-num" id="statPending">—</div><div class="stat-label"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></div></div>
+      <div class="stat-card rose"><div class="stat-num" id="statBlocked">—</div><div class="stat-label"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></div></div>
+      <div class="stat-card purple"><div class="stat-num" id="statRate">—</div><div class="stat-label"><span class="i18n-zh">完成率</span><span class="i18n-en">Rate</span></div></div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar" id="filterBar">
+      <button class="filter-btn active" onclick="filterTasks('all', this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
+      <button class="filter-btn" onclick="filterTasks('in_progress', this)"><span class="i18n-zh">進行中</span><span class="i18n-en">Active</span></button>
+      <button class="filter-btn" onclick="filterTasks('done', this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
+      <button class="filter-btn" onclick="filterTasks('pending', this)"><span class="i18n-zh">待辦</span><span class="i18n-en">Pending</span></button>
+      <button class="filter-btn" onclick="filterTasks('overdue', this)"><span class="i18n-zh">已延誤</span><span class="i18n-en">Overdue</span></button>
+      <button class="filter-btn" onclick="filterTasks('blocked', this)"><span class="i18n-zh">阻塞</span><span class="i18n-en">Blocked</span></button>
+    </div>
+
     <div class="tasks-layout">
       <div class="task-list-panel" id="taskList">
         <!-- Task cards injected here -->
@@ -961,6 +1132,20 @@ html = r"""<!DOCTYPE html>
         </div>
       </div>
     </div>
+
+    <!-- Latency Comparison Chart -->
+    <div class="latency-chart-section" id="latencyChartSection" style="display:none">
+      <div class="latency-chart-title"><span class="i18n-zh">搜索延遲比較</span><span class="i18n-en">Search Latency Comparison</span></div>
+      <div class="latency-chart" id="latencyChart">
+        <!-- bars injected by JS -->
+      </div>
+    </div>
+
+    <!-- System Cards Row -->
+    <div class="sys-cards-row" id="sysCardsRow" style="display:none">
+      <!-- injected by JS -->
+    </div>
+
   </div>
 </div>
 
@@ -1070,7 +1255,8 @@ html = r"""<!DOCTYPE html>
 let appData = null;
 let selectedTaskId = null;
 let currentLang = 'zh';
-let isAdmin = true; // In production, derive from auth token
+let isAdmin = true;
+let currentFilter = 'all';
 
 // ─── i18n ───
 function toggleLang() {
@@ -1097,7 +1283,6 @@ async function loadData() {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     appData = await resp.json();
   } catch(e) {
-    // Fallback to embedded initial data
     if (window.__INITIAL_DATA__) {
       appData = window.__INITIAL_DATA__;
     } else {
@@ -1122,7 +1307,8 @@ function showError(msg) {
     <div><b>API Unreachable</b></div>
     <div style="font-size:12px;margin-top:4px;color:#f87171">${msg}</div>
     <div style="font-size:12px;margin-top:8px;color:#94a3b8">Showing cached data if available</div>`;
-  document.getElementById('tab-tasks').querySelector('.page').prepend(el);
+  const tasksPage = document.getElementById('tab-tasks');
+  if (tasksPage) tasksPage.querySelector('.page').prepend(el);
 }
 
 // ─── Render all ───
@@ -1132,6 +1318,8 @@ function renderAll() {
   const ts = m.timestamp || new Date().toLocaleString('zh-TW');
   document.getElementById('lastUpdate').textContent = ts;
 
+  renderStats(appData.tasks || []);
+  renderFilters(appData.tasks || []);
   renderTasks(appData.tasks || [], appData.progress || []);
   renderMemory(m);
   renderUsers(appData.users || []);
@@ -1140,9 +1328,44 @@ function renderAll() {
     document.getElementById('usersTabBtn').style.display = '';
     document.getElementById('newTaskBtn').style.display = '';
   }
-  // Show newTaskBtn for task_manager too (if detected from user data)
-  const myUser = (appData.users || []).find(u => u.role === 'task_manager');
-  if (myUser) document.getElementById('newTaskBtn').style.display = '';
+}
+
+// ─── Stats ───
+function renderStats(tasks) {
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === 'done').length;
+  const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+  const pending = tasks.filter(t => t.status === 'pending').length;
+  const blocked = tasks.filter(t => t.status === 'blocked').length;
+  const completionRate = total > 0 ? Math.round(done / total * 100) : 0;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('statTotal', total);
+  set('statDone', done);
+  set('statInProgress', inProgress);
+  set('statPending', pending);
+  set('statBlocked', blocked);
+  set('statRate', completionRate + '%');
+}
+
+// ─── Filters ───
+function renderFilters(tasks) {
+  // Filter bar is static HTML; just sync active state
+  document.querySelectorAll('#filterBar .filter-btn').forEach(btn => {
+    const onclick = btn.getAttribute('onclick') || '';
+    const m = onclick.match(/filterTasks\('([^']+)'/);
+    if (m) btn.classList.toggle('active', m[1] === currentFilter);
+  });
+}
+
+function filterTasks(filterId, btn) {
+  currentFilter = filterId;
+  renderFilters(appData ? appData.tasks || [] : []);
+  renderTasks(appData ? appData.tasks || [] : [], appData ? appData.progress || [] : []);
+}
+
+function setFilter(filterId) {
+  filterTasks(filterId);
 }
 
 // ─── Tasks ───
@@ -1150,21 +1373,32 @@ function renderTasks(tasks, progress) {
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = '';
 
-  if (!tasks.length) {
+  // Filter tasks
+  let filtered = tasks;
+  if (currentFilter !== 'all') {
+    if (currentFilter === 'overdue') {
+      filtered = tasks.filter(t => t.isOverdue);
+    } else {
+      filtered = tasks.filter(t => t.status === currentFilter);
+    }
+  }
+
+  if (!filtered.length) {
     listEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px 0">No tasks found</div>';
     return;
   }
 
-  tasks.forEach((task, idx) => {
+  filtered.forEach((task, idx) => {
     const done = task.subtasks.filter(s => s.done).length;
     const total = task.subtasks.length;
     const pct = total > 0 ? Math.round(done / total * 100) : (task.status === 'done' ? 100 : 0);
     const statusClass = task.status || 'pending';
     const progressCls = statusClass === 'done' ? 'progress-green' : statusClass === 'in_progress' ? 'progress-blue' : 'progress-amber';
     const isSelected = task.id === selectedTaskId;
+    const isOverdue = task.isOverdue;
 
     const card = document.createElement('div');
-    card.className = `task-card status-${statusClass} fade-in${isSelected ? ' selected' : ''}`;
+    card.className = `task-card status-${statusClass}${isOverdue ? ' status-overdue' : ''} fade-in${isSelected ? ' selected' : ''}`;
     card.style.animationDelay = (idx * 0.04) + 's';
     card.innerHTML = `
       <div class="task-card-header">
@@ -1174,7 +1408,15 @@ function renderTasks(tasks, progress) {
       <div class="task-meta">
         <span class="badge badge-cat">${task.category || 'General'}</span>
         ${statusBadge(task.status)}
+        ${isOverdue ? '<span class="badge badge-overdue">🚨 已延誤</span>' : ''}
       </div>
+      ${task.createdDate || task.dueDate || task.assignee ? `
+        <div class="task-date-row">
+          ${task.createdDate ? `<span>📅 ${task.createdDate}</span>` : ''}
+          ${task.dueDate ? `<span>⏰ ${task.dueDate}</span>` : ''}
+          ${task.assignee ? `<span class="badge-assignee">👤 ${task.assignee}</span>` : ''}
+        </div>
+      ` : ''}
       ${total > 0 ? `
         <div class="task-progress-label">${done}/${total} subtasks</div>
         <div class="progress-wrap">
@@ -1191,7 +1433,8 @@ function statusBadge(status) {
   const map = {
     done: ['badge-ok', '✓ Done', '✓ 完成'],
     in_progress: ['badge-warn', '⚡ In Progress', '⚡ 進行中'],
-    pending: ['badge-p3', '⏳ Pending', '⏳ 待處理'],
+    pending: ['badge-p3', '⏳ Pending', '⏳ 待辦'],
+    blocked: ['badge-err', '🚫 Blocked', '🚫 阻塞'],
   };
   const [cls, en, zh] = map[status] || map.pending;
   return `<span class="badge ${cls}"><span class="i18n-zh">${zh}</span><span class="i18n-en">${en}</span></span>`;
@@ -1199,16 +1442,11 @@ function statusBadge(status) {
 
 function selectTask(task, progress) {
   selectedTaskId = task.id;
-
-  // Highlight selected card
   document.querySelectorAll('.task-card').forEach(c => c.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
 
-  // Render detail
   const done = task.subtasks.filter(s => s.done).length;
   const total = task.subtasks.length;
-
-  // Find related progress entries (search title words in progress)
   const titleWords = task.title.toLowerCase().split(/[\s\/]+/).filter(w => w.length > 2);
   const related = progress.filter(e =>
     titleWords.some(w => e.title.toLowerCase().includes(w) || e.items.some(i => i.toLowerCase().includes(w)))
@@ -1221,17 +1459,29 @@ function selectTask(task, progress) {
       <span class="badge badge-${task.priority?.toLowerCase() || 'p3'}">${task.priority}</span>
       <span class="badge badge-cat">${task.category}</span>
       ${statusBadge(task.status)}
-      ${total > 0 ? `<span style="font-size:12px;color:var(--muted)">${done}/${total} subtasks (${Math.round(done/total*100)}%)</span>` : ''}
+      ${task.isOverdue ? '<span class="badge badge-overdue">已延誤</span>' : ''}
+      ${total > 0 ? `<span style="font-size:12px;color:var(--muted)">${done}/${total} (${Math.round(done/total*100)}%)</span>` : ''}
     </div>
+    ${task.createdDate || task.dueDate || task.assignee ? `
+      <div class="mem-kv-list">
+        ${task.createdDate ? `<div class="mem-kv-row"><span class="mem-kv-key">📅 Created</span><span class="mem-kv-val">${task.createdDate}</span></div>` : ''}
+        ${task.dueDate ? `<div class="mem-kv-row"><span class="mem-kv-key">⏰ Due</span><span class="mem-kv-val">${task.dueDate}</span></div>` : ''}
+        ${task.assignee ? `<div class="mem-kv-row"><span class="mem-kv-key">👤 Assignee</span><span class="mem-kv-val">${task.assignee}</span></div>` : ''}
+      </div>
+    ` : ''}
 
     ${task.subtasks.length > 0 ? `
-      <div class="section-header">
-        <span class="i18n-zh">子任務</span>
-        <span class="i18n-en">Subtasks</span>
+      <div class="section-header" style="display:flex;align-items:center;justify-content:space-between">
+        <span><span class="i18n-zh">子任務</span><span class="i18n-en">Subtasks</span></span>
+        <div class="subtask-filter" id="subtaskFilter">
+          <button class="subtask-filter-btn active" onclick="filterSubtasks('all',this)"><span class="i18n-zh">全部</span><span class="i18n-en">All</span></button>
+          <button class="subtask-filter-btn" onclick="filterSubtasks('done',this)"><span class="i18n-zh">已完成</span><span class="i18n-en">Done</span></button>
+          <button class="subtask-filter-btn" onclick="filterSubtasks('pending',this)"><span class="i18n-zh">未完成</span><span class="i18n-en">Todo</span></button>
+        </div>
       </div>
-      <div class="subtask-list">
-        ${task.subtasks.map(s => `
-          <div class="subtask-item${s.done ? ' done' : ''}">
+      <div class="subtask-list" id="subtaskList">
+        ${task.subtasks.map((s,si) => `
+          <div class="subtask-item${s.done ? ' done' : ''}" data-subtask-done="${s.done}">
             <div class="subtask-check${s.done ? ' checked' : ''}">${s.done ? '✓' : ''}</div>
             <div class="subtask-text${s.done ? ' done-text' : ''}">${s.text}</div>
           </div>
@@ -1260,24 +1510,35 @@ function selectTask(task, progress) {
   `;
 }
 
-// ─── Memory — Three-Panel ───
+// ─── Subtask Filter ───
+function filterSubtasks(type, btn) {
+  document.querySelectorAll('#subtaskFilter .subtask-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const items = document.querySelectorAll('#subtaskList .subtask-item');
+  items.forEach(item => {
+    const isDone = item.dataset.subtaskDone === 'true';
+    if (type === 'all') item.style.display = '';
+    else if (type === 'done') item.style.display = isDone ? '' : 'none';
+    else item.style.display = isDone ? 'none' : '';
+  });
+}
+
+// ─── Memory ───
 let memData = null;
 let selectedLayerKey = null;
-let selectedMidIndex = null;
 
 function renderMemory(m) {
   memData = m;
   selectedLayerKey = null;
-  selectedMidIndex = null;
 
   const layers = [
-    { key: 'l0',     label: 'L0',  name: { zh: 'Markdown 文件', en: 'Markdown Files' } },
-    { key: 'l1',     label: 'L1',  name: { zh: 'lossless-claw', en: 'lossless-claw' } },
-    { key: 'l2',     label: 'L2',  name: { zh: 'LanceDB 向量', en: 'LanceDB Vector' } },
-    { key: 'l3',     label: 'L3',  name: { zh: 'QMD BM25', en: 'QMD BM25' } },
+    { key: 'l0', label: 'L0', name: { zh: 'Markdown 文件', en: 'Markdown Files' } },
+    { key: 'l1', label: 'L1', name: { zh: 'lossless-claw', en: 'lossless-claw' } },
+    { key: 'l2', label: 'L2', name: { zh: 'LanceDB 向量', en: 'LanceDB Vector' } },
+    { key: 'l3', label: 'L3', name: { zh: 'QMD BM25', en: 'QMD BM25' } },
     { key: 'l2plus', label: 'L2+', name: { zh: 'MemOS 知識圖譜', en: 'MemOS Graph' } },
-    { key: 'l4',     label: 'L4',  name: { zh: 'Cognee 深度理解', en: 'Cognee Cognition' } },
-    { key: 'system', label: '⚙',   name: { zh: '系統', en: 'System' } },
+    { key: 'l4', label: 'L4', name: { zh: 'Cognee 深度理解', en: 'Cognee Cognition' } },
+    { key: 'system', label: '⚙', name: { zh: '系統', en: 'System' } },
   ];
 
   const listEl = document.getElementById('memLayerList');
@@ -1286,6 +1547,16 @@ function renderMemory(m) {
     const data = layer.key === 'system' ? { status: (m.gateway?.status || 'ok') } : (m[layer.key] || {});
     const status = data.status || 'warn';
     const dotCls = status === 'ok' ? 'dot-ok' : status === 'warn' ? 'dot-warn' : 'dot-err';
+    // Compute injection estimate for badge
+    let injectPct = 0;
+    if (layer.key === 'l0') injectPct = Math.min(100, Math.round((m.l0?.size_kb||0)*0.25/50000*100));
+    else if (layer.key === 'l1') injectPct = Math.min(100, Math.round((m.l1?.summaries||0)*120/100000*100));
+    else if (layer.key === 'l2') injectPct = Math.min(100, Math.round((m.l2?.db_size_mb||0)*2/8000*100));
+    else if (layer.key === 'l3') injectPct = Math.min(100, Math.round((m.l3?.documents||0)*15/5000*100));
+    else if (layer.key === 'l2plus') injectPct = Math.min(100, Math.round(800/10000*100));
+    else if (layer.key === 'l4') injectPct = Math.min(100, Math.round(600/8000*100));
+    const injectFillCls = injectPct > 75 ? 'inject-hot' : injectPct > 40 ? 'inject-warn' : 'inject-ok';
+
     const item = document.createElement('div');
     item.className = 'mem-layer-item fade-in';
     item.style.animationDelay = (idx * 0.05) + 's';
@@ -1294,28 +1565,116 @@ function renderMemory(m) {
       <span class="badge badge-layer" style="font-size:10px;padding:1px 6px">${layer.label}</span>
       <div style="flex:1;min-width:0">
         <div class="mem-layer-name"><span class="i18n-zh">${layer.name.zh}</span><span class="i18n-en">${layer.name.en}</span></div>
+        ${layer.key !== 'system' ? `<div class="inject-bar" style="margin-top:3px"><div class="inject-fill ${injectFillCls}" style="width:${injectPct}%"></div></div>` : ''}
       </div>
       <span class="status-dot ${dotCls}"></span>
     `;
     item.onclick = () => selectMemLayer(layer.key);
     listEl.appendChild(item);
   });
+
+  // Render latency comparison chart
+  renderLatencyChart(m);
+  // Render system cards
+  renderSysCards(m);
+}
+
+// ─── Latency Chart ───
+function renderLatencyChart(m) {
+  const section = document.getElementById('latencyChartSection');
+  const chart = document.getElementById('latencyChart');
+  if (!section || !chart) return;
+
+  const l2plusMs = m.l2plus?.search_latency_ms ?? -1;
+  const l4Ms = m.l4?.search_latency_ms ?? -1;
+
+  if (l2plusMs < 0 && l4Ms < 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const bars = [
+    { label: 'L2+ MemOS', ms: l2plusMs, color: l2plusMs < 500 ? 'lc-bar-ok' : l2plusMs < 1500 ? 'lc-bar-warn' : 'lc-bar-err' },
+    { label: 'L4 Cognee', ms: l4Ms,     color: l4Ms < 500 ? 'lc-bar-ok' : l4Ms < 1500 ? 'lc-bar-warn' : 'lc-bar-err' },
+  ];
+  const maxMs = Math.max(1, ...bars.map(b => b.ms).filter(v => v >= 0));
+  chart.innerHTML = bars.map(b => {
+    if (b.ms < 0) return `<div class="lc-bar-wrap"><div class="lc-val" style="color:var(--muted)">N/A</div><div class="lc-bar ${b.color}" style="height:4px"></div><div class="lc-label">${b.label}</div></div>`;
+    const h = Math.max(4, Math.round(b.ms / maxMs * 100));
+    return `<div class="lc-bar-wrap"><div class="lc-val">${b.ms}ms</div><div class="lc-bar ${b.color}" style="height:${h}%"></div><div class="lc-label">${b.label}</div></div>`;
+  }).join('');
+}
+
+// ─── System Cards ───
+function modelBadgeCls(model) {
+  if (!model || model === 'unknown' || model === '—') return 'badge-layer';
+  const m = model.toLowerCase();
+  if (m.includes('claude') || m.includes('anthropic')) return 'badge-anthropic';
+  if (m.includes('minimax') || m.includes('m2')) return 'badge-minimax';
+  if (m.includes('gpt') || m.includes('openai')) return 'badge-openai';
+  return 'badge-layer';
+}
+
+function renderSysCards(m) {
+  const row = document.getElementById('sysCardsRow');
+  if (!row) return;
+  const gw = m.gateway || {};
+  const disk = m.disk || {};
+  const rootPct  = parseInt(disk.root  || '0') || 0;
+  const usersPct = parseInt(disk.users || '0') || 0;
+  const rootCls  = rootPct  > 85 ? 'disk-err' : rootPct  > 70 ? 'disk-warn' : 'disk-ok';
+  const usersCls = usersPct > 85 ? 'disk-err' : usersPct > 70 ? 'disk-warn' : 'disk-ok';
+  const gwColor  = gw.status === 'ok' ? 'var(--green)' : 'var(--amber)';
+  const nasOk    = m.l2plus?.status === 'ok' && m.l4?.status === 'ok';
+  const nasColor = nasOk ? 'var(--green)' : 'var(--rose)';
+
+  row.style.display = '';
+  row.innerHTML = `
+    <div class="sys-mini-card">
+      <div class="sys-mini-title">🌐 Gateway</div>
+      <div class="sys-mini-val" style="color:${gwColor}">${gw.status === 'ok' ? '✓ OK' : '⚠ Warn'}</div>
+      <div class="sys-mini-status" style="color:var(--muted)">${gw.critical_issues ?? 0} issues</div>
+    </div>
+    <div class="sys-mini-card">
+      <div class="sys-mini-title">💾 Disk /</div>
+      <div class="sys-mini-val">${disk.root || '—'}</div>
+      <div class="sys-disk-track"><div class="sys-disk-fill ${rootCls}" style="width:${rootPct}%"></div></div>
+    </div>
+    <div class="sys-mini-card">
+      <div class="sys-mini-title">🏠 Disk /Users</div>
+      <div class="sys-mini-val">${disk.users || '—'}</div>
+      <div class="sys-disk-track"><div class="sys-disk-fill ${usersCls}" style="width:${usersPct}%"></div></div>
+    </div>
+    <div class="sys-mini-card">
+      <div class="sys-mini-title">🐳 NAS Docker</div>
+      <div class="sys-mini-val" style="color:${nasColor}">${nasOk ? '✓ Running' : '⚠ Partial'}</div>
+      <div class="sys-mini-status" style="color:var(--muted)">memos·cognee·neo4j·qdrant</div>
+    </div>
+  `;
 }
 
 function selectMemLayer(key) {
   selectedLayerKey = key;
-  selectedMidIndex = null;
-
   document.querySelectorAll('.mem-layer-item').forEach(el => {
     el.classList.toggle('selected', el.dataset.key === key);
   });
-
   renderMemMid(key);
-
   document.getElementById('memRightContent').innerHTML =
     '<div class="mem-panel-empty"><div>🔍</div><span class="i18n-zh">選擇項目查看詳情</span><span class="i18n-en">Select an item</span></div>';
-  document.getElementById('memRightHeader').innerHTML =
-    '<span class="i18n-zh">詳細資訊</span><span class="i18n-en">Detail</span>';
+}
+
+function injectBar(pct, label) {
+  const fillCls = pct > 75 ? 'inject-hot' : pct > 40 ? 'inject-warn' : 'inject-ok';
+  return `<div class="inject-meta"><span>${label}</span><span>${pct}%</span></div>
+    <div class="inject-bar"><div class="inject-fill ${fillCls}" style="width:${pct}%"></div></div>`;
+}
+
+function latencyGauge(ms) {
+  if (ms < 0) return '';
+  const pct = Math.min(100, Math.round(ms / 20));
+  const cls = ms < 500 ? 'gauge-ok' : ms < 1500 ? 'gauge-warn' : 'gauge-err';
+  return `<div class="latency-gauge" style="margin:8px 0">
+    <span style="font-size:13px;font-weight:700">${ms}ms</span>
+    <div class="gauge-bar-wrap"><div class="gauge-bar-fill ${cls}" style="width:${pct}%"></div></div>
+  </div>`;
 }
 
 function renderMemMid(key) {
@@ -1324,516 +1683,110 @@ function renderMemMid(key) {
   const hdrEl = document.getElementById('memMidHeader');
   midEl.innerHTML = '';
 
-  const mkItem = (icon, name, meta, idx) => {
+  const mkItem = (icon, name, meta, extra) => {
     const el = document.createElement('div');
     el.className = 'mem-mid-item fade-in';
-    el.style.animationDelay = (idx * 0.04) + 's';
-    el.dataset.idx = idx;
-    el.innerHTML = `<span style="font-size:14px">${icon}</span><span class="mem-mid-item-name">${name}</span><span class="mem-mid-item-meta">${meta}</span>`;
+    el.innerHTML = `<span style="font-size:14px;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div class="mem-mid-item-name">${name}</div>
+        ${extra || ''}
+      </div>
+      ${meta ? `<span class="mem-mid-item-meta">${meta}</span>` : ''}`;
     midEl.appendChild(el);
     return el;
   };
 
-  const selectMid = (idx, el, detailFn) => {
-    selectedMidIndex = idx;
-    document.querySelectorAll('.mem-mid-item').forEach(e => e.classList.remove('selected'));
-    el.classList.add('selected');
-    detailFn();
-  };
-
   if (key === 'l0') {
     hdrEl.innerHTML = '<span class="i18n-zh">工作區 MD 文件</span><span class="i18n-en">Workspace MD Files</span>';
-    const names = m.l0?.names || [];
-    if (!names.length) { midEl.innerHTML = '<div class="mem-panel-empty"><div>📄</div>No files</div>'; return; }
+    const d = m.l0 || {};
+    const iPct = Math.min(100, Math.round((d.size_kb||0)*0.25/50000*100));
+    // Summary item with injection bar
+    const sumEl = mkItem('📊', `${d.files||0} files · ${d.size_kb||0} KB`, d.status||'?',
+      injectBar(iPct, 'Token injection estimate'));
+    sumEl.onclick = () => renderDetailKV('L0 Markdown', [
+      {k:'Files', v:d.files}, {k:'Size', v:(d.size_kb||0)+' KB'}, {k:'Status', v:d.status}
+    ]);
+    const names = d.names || [];
     names.forEach((name, i) => {
-      const el = mkItem('📄', name, '', i);
-      el.onclick = () => selectMid(i, el, () => renderDetailL0File(name));
+      const el = mkItem('📄', name, '', '');
+      el.onclick = () => renderDetailL0File(name);
     });
 
   } else if (key === 'l1') {
-    hdrEl.innerHTML = '<span class="i18n-zh">lossless-claw 概覽</span><span class="i18n-en">lossless-claw Overview</span>';
+    hdrEl.innerHTML = '<span class="i18n-zh">lossless-claw</span><span class="i18n-en">lossless-claw</span>';
     const d = m.l1 || {};
-    const items = [
-      { icon: '📊', name: '摘要統計 / Summary Stats', meta: d.summaries + ' entries' },
-      { icon: '🤖', name: '摘要模型 / Summary Model', meta: shortModel(d.model) },
-      { icon: '💾', name: 'SQLite DB', meta: d.db_size_kb + ' KB' },
-    ];
-    items.forEach((it, i) => {
-      const el = mkItem(it.icon, it.name, it.meta, i);
-      el.onclick = () => selectMid(i, el, () => renderDetailKV('lossless-claw', [
-        { k: 'Summaries', v: d.summaries },
-        { k: 'Model', v: d.model },
-        { k: 'DB Size', v: d.db_size_kb + ' KB' },
-        { k: 'Status', v: d.status },
-      ]));
-    });
+    const iPct = Math.min(100, Math.round((d.summaries||0)*120/100000*100));
+    const mdlCls = modelBadgeCls(d.model);
+    mkItem('📊', `${d.summaries||0} summaries`, '', injectBar(iPct, 'Token injection') +
+      `<div style="margin-top:6px"><span class="badge ${mdlCls}" style="font-size:10px">${shortModel(d.model)}</span></div>`)
+    .onclick = () => renderDetailKV('lossless-claw', [
+      {k:'Summaries',v:d.summaries},{k:'Model',v:d.model},{k:'DB Size',v:(d.db_size_kb||0)+' KB'},{k:'Status',v:d.status}
+    ]);
+    mkItem('💾', 'SQLite DB', (d.db_size_kb||0)+' KB', '').onclick = () => renderDetailKV('lossless-claw DB', [
+      {k:'DB Path',v:'~/.openclaw/lcm.db'},{k:'Size',v:(d.db_size_kb||0)+' KB'}
+    ]);
 
   } else if (key === 'l2') {
     hdrEl.innerHTML = '<span class="i18n-zh">LanceDB 配置</span><span class="i18n-en">LanceDB Config</span>';
     const d = m.l2 || {};
-    const items = [
-      { icon: '🗄', name: '向量資料庫 / Vector DB', meta: d.lance_files + ' files' },
-      { icon: '🧬', name: '嵌入模型 / Embedding Model', meta: shortModel(d.embedding_model) },
-      { icon: '⏱', name: '衰減設定 / Decay Settings', meta: 'T½ ' + d.halflife_days + 'd' },
-      { icon: '🔃', name: 'Rerank 設定 / Rerank Config', meta: d.rerank || 'none' },
-    ];
-    items.forEach((it, i) => {
-      const el = mkItem(it.icon, it.name, it.meta, i);
-      el.onclick = () => selectMid(i, el, () => renderDetailKV('LanceDB Pro', [
-        { k: 'Lance Files', v: d.lance_files },
-        { k: 'DB Size', v: d.db_size_mb + ' MB' },
-        { k: 'Embedding Model', v: d.embedding_model },
-        { k: 'Rerank', v: d.rerank },
-        { k: 'Half-life (days)', v: d.halflife_days },
-        { k: 'Recency Weight', v: d.recency_weight },
-        { k: 'Status', v: d.status },
-      ]));
-    });
+    const iPct = Math.min(100, Math.round((d.db_size_mb||0)*2/8000*100));
+    mkItem('🗄', `${d.lance_files||0} lance files · ${d.db_size_mb||0} MB`, '', injectBar(iPct, 'Vector tokens estimate'))
+    .onclick = () => renderDetailKV('LanceDB Pro', [
+      {k:'Lance Files',v:d.lance_files},{k:'DB Size',v:(d.db_size_mb||0)+' MB'},
+      {k:'Embedding',v:d.embedding_model},{k:'Rerank',v:d.rerank||'none'},
+      {k:'Half-life',v:(d.halflife_days||'?')+' days'},{k:'Status',v:d.status}
+    ]);
+    mkItem('🧬', 'Embedding Model', shortModel(d.embedding_model), '').onclick = () => {};
+    mkItem('🔃', 'Rerank', d.rerank||'none', '').onclick = () => {};
 
   } else if (key === 'l3') {
-    hdrEl.innerHTML = '<span class="i18n-zh">QMD 文件</span><span class="i18n-en">QMD Documents</span>';
+    hdrEl.innerHTML = '<span class="i18n-zh">QMD BM25</span><span class="i18n-en">QMD BM25</span>';
     const d = m.l3 || {};
-    midEl.innerHTML = '<div class="mem-panel-empty"><div>⏳</div><span>Loading documents...</span></div>';
-    const fallbackL3 = () => {
-      midEl.innerHTML = '';
-      const el0 = mkItem('📚', (d.documents || 0) + ' Documents', d.engine || 'BM25', 0);
-      el0.onclick = () => selectMid(0, el0, () => renderDetailKV('QMD BM25', [
-        { k: 'Documents', v: d.documents },
-        { k: 'Engine', v: d.engine },
-        { k: 'Status', v: d.status },
-      ]));
-    };
-    fetch('/api/qmd/documents')
-      .then(r => r.ok ? r.json() : null)
-      .then(docs => {
-        midEl.innerHTML = '';
-        if (!docs || !Array.isArray(docs) || !docs.length) { fallbackL3(); return; }
-        docs.forEach((doc, i) => {
-          const title = doc.title || doc.filename || doc.id || ('Document ' + (i + 1));
-          const collection = doc.collection || doc.namespace || '—';
-          const date = (doc.date || doc.created_at || '').slice(0, 10);
-          const el = mkItem('📄', title, collection + (date ? ' · ' + date : ''), i);
-          el.onclick = () => selectMid(i, el, () => renderDetailQMDDoc(doc));
-        });
-      })
-      .catch(() => fallbackL3());
+    const iPct = Math.min(100, Math.round((d.documents||0)*15/5000*100));
+    mkItem('📚', `${d.documents||0} documents`, d.engine||'BM25', injectBar(iPct, 'BM25 index tokens'))
+    .onclick = () => renderDetailKV('QMD BM25', [{k:'Documents',v:d.documents},{k:'Engine',v:d.engine||'BM25'},{k:'Status',v:d.status}]);
 
   } else if (key === 'l2plus') {
     hdrEl.innerHTML = '<span class="i18n-zh">MemOS 服務</span><span class="i18n-en">MemOS Services</span>';
     const d = m.l2plus || {};
-    const items = [
-      { icon: '🌐', name: 'API Endpoint', meta: d.status === 'ok' ? '✓ OK' : '✗ Error' },
-      { icon: '🕸', name: 'Neo4j Graph DB', meta: d.neo4j || '—' },
-      { icon: '📐', name: 'Qdrant Vector DB', meta: d.qdrant || '—' },
-      { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
-      { icon: '🫧', name: 'Knowledge Graph', meta: 'View graph' },
-    ];
-    items.forEach((it, i) => {
-      const el = mkItem(it.icon, it.name, it.meta, i);
-      el.onclick = () => selectMid(i, el, () => renderDetailL2plus(d));
-    });
+    const iPct = Math.min(100, Math.round(800/10000*100));
+    const mdlCls = modelBadgeCls(d.llm_model);
+    mkItem('🌐', 'API', d.status==='ok'?'✓ Online':'✗ Offline',
+      injectBar(iPct, 'Context injection') +
+      `<div style="margin-top:6px"><span class="badge ${mdlCls}" style="font-size:10px">${shortModel(d.llm_model)}</span></div>` +
+      latencyGauge(d.search_latency_ms >= 0 ? d.search_latency_ms : -1))
+    .onclick = () => renderDetailL2plus(d);
+    mkItem('🕸', 'Neo4j', d.neo4j||'—', '').onclick = () => renderDetailL2plus(d);
+    mkItem('📐', 'Qdrant', d.qdrant||'—', '').onclick = () => renderDetailL2plus(d);
 
   } else if (key === 'l4') {
     hdrEl.innerHTML = '<span class="i18n-zh">Cognee 服務</span><span class="i18n-en">Cognee Services</span>';
     const d = m.l4 || {};
-    const items = [
-      { icon: '🌐', name: 'API Endpoint', meta: d.status === 'ok' ? '✓ OK' : '✗ Error' },
-      { icon: '⚡', name: 'Search Latency', meta: d.search_latency_ms >= 0 ? d.search_latency_ms + ' ms' : 'N/A' },
-      { icon: '🤖', name: 'LLM Model', meta: shortModel(d.llm_model) },
-      { icon: '🫧', name: 'Knowledge Graph', meta: 'View graph' },
-    ];
-    items.forEach((it, i) => {
-      const el = mkItem(it.icon, it.name, it.meta, i);
-      el.onclick = () => selectMid(i, el, () => renderDetailL4(d));
-    });
+    const iPct = Math.min(100, Math.round(600/8000*100));
+    const mdlCls = modelBadgeCls(d.llm_model);
+    mkItem('🌐', 'API', d.status==='ok'?'✓ Online':'✗ Offline',
+      injectBar(iPct, 'Context injection') +
+      `<div style="margin-top:6px"><span class="badge ${mdlCls}" style="font-size:10px">${shortModel(d.llm_model)}</span></div>` +
+      latencyGauge(d.search_latency_ms >= 0 ? d.search_latency_ms : -1))
+    .onclick = () => renderDetailL4(d);
 
   } else if (key === 'system') {
     hdrEl.innerHTML = '<span class="i18n-zh">系統概覽</span><span class="i18n-en">System Overview</span>';
     const gw = m.gateway || {};
     const disk = m.disk || {};
-    const items = [
-      { icon: '🌐', name: 'Gateway', meta: gw.status === 'ok' ? '✓ OK' : '⚠ ' + gw.critical_issues + ' issues' },
-      { icon: '💾', name: 'Disk /', meta: disk.root || '—' },
-      { icon: '🏠', name: 'Disk /Users', meta: disk.users || '—' },
-      { icon: '🐳', name: 'NAS Containers', meta: (m.l2plus?.status === 'ok' && m.l4?.status === 'ok') ? '✓ Running' : '⚠ Partial' },
-    ];
-    items.forEach((it, i) => {
-      const el = mkItem(it.icon, it.name, it.meta, i);
-      el.onclick = () => selectMid(i, el, () => renderDetailSystem(m));
-    });
+    [
+      { icon: '🌐', label: 'Gateway', value: gw.status === 'ok' ? '✓ OK' : '⚠ ' + gw.critical_issues + ' issues', fn: () => renderDetailSystem(m) },
+      { icon: '💾', label: 'Disk /', value: disk.root || '—', fn: () => renderDetailSystem(m) },
+      { icon: '🏠', label: 'Disk /Users', value: disk.users || '—', fn: () => renderDetailSystem(m) },
+      { icon: '🐳', label: 'NAS Docker', value: (m.l2plus?.status==='ok'&&m.l4?.status==='ok')?'✓ Running':'⚠ Partial', fn: () => renderDetailSystem(m) },
+    ].forEach(it => { mkItem(it.icon, it.label, it.value, '').onclick = it.fn; });
   }
 }
 
-function renderDetailL0File(filename) {
-  const d = memData?.l0 || {};
-  const right = document.getElementById('memRightContent');
-  right.innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">📄 ${filename}</div>
-      <div class="mem-detail-meta">~/.openclaw/workspace/${filename}</div>
-      <div class="mem-kv-list">
-        <div class="mem-kv-row"><span class="mem-kv-key">Total Files</span><span class="mem-kv-val">${d.files}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Total Size</span><span class="mem-kv-val">${d.size_kb} KB</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Status</span><span class="mem-kv-val">${d.status}</span></div>
-      </div>
-      <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">
-        <span class="i18n-zh">檔案預覽</span><span class="i18n-en">File preview</span>
-      </div>
-      <div class="mem-detail-preview" id="l0FilePreview"><span style="color:var(--muted)">Loading...</span></div>
-    </div>
-  `;
-  fetch('/api/file?path=workspace/' + encodeURIComponent(filename))
-    .then(r => r.ok ? r.text() : null)
-    .then(text => {
-      const el = document.getElementById('l0FilePreview');
-      if (el) el.textContent = text ? text.slice(0, 500) + (text.length > 500 ? '\n...' : '') : '(preview not available via API)';
-    }).catch(() => {
-      const el = document.getElementById('l0FilePreview');
-      if (el) el.textContent = '(preview not available via API)';
-    });
-}
-
-function renderDetailKV(title, kvs) {
-  document.getElementById('memRightContent').innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">${title}</div>
-      <div class="mem-kv-list">
-        ${kvs.map(kv => `<div class="mem-kv-row"><span class="mem-kv-key">${kv.k}</span><span class="mem-kv-val">${kv.v ?? '—'}</span></div>`).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function latencyBlock(ms) {
-  const gaugePct = ms < 0 ? 0 : Math.min(100, Math.round(ms / 15));
-  const gaugeCls = ms < 0 ? 'gauge-err' : ms < 500 ? 'gauge-ok' : ms < 1500 ? 'gauge-warn' : 'gauge-err';
-  return `<div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:6px">Search Latency</div>
-    <div class="latency-gauge">
-      <span style="font-size:18px;font-weight:700;color:var(--text)">${ms >= 0 ? ms + ' ms' : 'N/A'}</span>
-      <div class="gauge-bar-wrap"><div class="gauge-bar-fill ${gaugeCls}" style="width:${gaugePct}%"></div></div>
-    </div>`;
-}
-
-function renderDetailQMDDoc(doc) {
-  const path = doc.path || doc.file_path || '';
-  const right = document.getElementById('memRightContent');
-  right.innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">📄 ${doc.title || doc.filename || 'Document'}</div>
-      <div class="mem-detail-meta">${path}</div>
-      <div class="mem-kv-list">
-        ${doc.collection ? `<div class="mem-kv-row"><span class="mem-kv-key">Collection</span><span class="mem-kv-val">${doc.collection}</span></div>` : ''}
-        ${doc.namespace ? `<div class="mem-kv-row"><span class="mem-kv-key">Namespace</span><span class="mem-kv-val">${doc.namespace}</span></div>` : ''}
-        ${doc.date || doc.created_at ? `<div class="mem-kv-row"><span class="mem-kv-key">Date</span><span class="mem-kv-val">${(doc.date || doc.created_at || '').slice(0, 10)}</span></div>` : ''}
-        ${doc.size ? `<div class="mem-kv-row"><span class="mem-kv-key">Size</span><span class="mem-kv-val">${doc.size}</span></div>` : ''}
-        ${doc.id ? `<div class="mem-kv-row"><span class="mem-kv-key">ID</span><span class="mem-kv-val" style="font-size:11px;font-family:monospace">${doc.id}</span></div>` : ''}
-        ${doc.score !== undefined ? `<div class="mem-kv-row"><span class="mem-kv-key">Score</span><span class="mem-kv-val">${doc.score}</span></div>` : ''}
-      </div>
-      ${doc.content || doc.text || doc.summary ? `
-        <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">Preview</div>
-        <div class="mem-detail-preview">${(doc.content || doc.text || doc.summary || '').slice(0, 600)}</div>
-      ` : ''}
-    </div>
-  `;
-}
-
-function buildGraphSVG(nodes) {
-  // Build a bubble chart from node type summary
-  const typeMap = {};
-  nodes.forEach(n => {
-    const t = n.type || n.node_type || 'Unknown';
-    typeMap[t] = (typeMap[t] || 0) + 1;
-  });
-  const types = Object.entries(typeMap).sort((a, b) => b[1] - a[1]);
-  const total = types.reduce((s, [, c]) => s + c, 0);
-  const colors = { Memory: '#3b82f6', Property: '#22c55e', Entity: '#f59e0b', Relationship: '#a855f7', Unknown: '#64748b' };
-  const W = 320, H = 220, CX = W / 2, CY = H / 2;
-  const maxR = 55, minR = 18;
-  const maxCount = types[0]?.[1] || 1;
-
-  // Arrange in a circle
-  const circleItems = types.map(([type, count], i) => {
-    const angle = (i / types.length) * 2 * Math.PI - Math.PI / 2;
-    const r = Math.max(minR, Math.round(maxR * Math.sqrt(count / maxCount)));
-    const dist = types.length === 1 ? 0 : Math.min(80, 30 + r);
-    const x = Math.round(CX + dist * Math.cos(angle));
-    const y = Math.round(CY + dist * Math.sin(angle));
-    const color = colors[type] || '#6366f1';
-    return { type, count, x, y, r, color };
-  });
-
-  const circles = circleItems.map(c =>
-    `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${c.color}" fill-opacity="0.25" stroke="${c.color}" stroke-width="1.5">
-      <title>${c.type}: ${c.count} nodes</title>
-    </circle>
-    <text x="${c.x}" y="${c.y - 4}" text-anchor="middle" fill="${c.color}" font-size="10" font-weight="600">${c.type}</text>
-    <text x="${c.x}" y="${c.y + 10}" text-anchor="middle" fill="${c.color}" font-size="9" opacity="0.8">${c.count}</text>`
-  ).join('');
-
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:220px;display:block">${circles}</svg>`;
-}
-
-function renderDetailL2plus(d) {
-  const right = document.getElementById('memRightContent');
-  right.innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">MemOS L2+</div>
-      <div class="mem-detail-meta">${d.api || ''}</div>
-      <div class="mem-kv-list">
-        <div class="mem-kv-row"><span class="mem-kv-key">API Status</span><span class="mem-kv-val" style="color:var(--${d.status==='ok'?'green':'rose'})">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge badge-layer" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val" style="color:var(--${d.neo4j==='ok'?'green':'rose'})">${d.neo4j==='ok'?'✓ OK':'✗ Error'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val" style="color:var(--${d.qdrant==='ok'?'green':'rose'})">${d.qdrant==='ok'?'✓ OK':'✗ Error'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
-      </div>
-      ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
-      <div id="l2plusGraphSection" style="margin-top:16px">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Knowledge Graph</div>
-        <div id="l2plusGraphLoading" style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading graph...</div>
-      </div>
-    </div>
-  `;
-  loadGraphSection('l2plusGraphLoading', 'l2plusGraphSection');
-}
-
-function renderDetailL4(d) {
-  const right = document.getElementById('memRightContent');
-  right.innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">Cognee L4</div>
-      <div class="mem-detail-meta">${d.api || ''}</div>
-      <div class="mem-kv-list">
-        <div class="mem-kv-row"><span class="mem-kv-key">API Status</span><span class="mem-kv-val" style="color:var(--${d.status==='ok'?'green':'rose'})">${d.status==='ok'?'✓ Online':'✗ Offline'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">LLM Model</span><span class="mem-kv-val"><span class="badge badge-layer" style="font-size:11px">${shortModel(d.llm_model)}</span></span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Endpoint</span><span class="mem-kv-val" style="font-size:11px">${d.api || '—'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Last Check</span><span class="mem-kv-val" style="font-size:11px">${memData?.timestamp || '—'}</span></div>
-      </div>
-      ${latencyBlock(d.search_latency_ms >= 0 ? d.search_latency_ms : -1)}
-      <div id="l4GraphSection" style="margin-top:16px">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Knowledge Graph</div>
-        <div id="l4GraphLoading" style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Loading graph...</div>
-      </div>
-    </div>
-  `;
-  loadGraphSection('l4GraphLoading', 'l4GraphSection');
-}
-
-function loadGraphSection(loadingId, sectionId) {
-  fetch('/api/graph/nodes')
-    .then(r => r.ok ? r.json() : null)
-    .then(data => {
-      const loadingEl = document.getElementById(loadingId);
-      const sectionEl = document.getElementById(sectionId);
-      if (!loadingEl || !sectionEl) return;
-      const nodes = Array.isArray(data) ? data : (data?.nodes || data?.data || []);
-      if (!nodes.length) {
-        loadingEl.textContent = 'No graph data available';
-        return;
-      }
-      // Type summary
-      const typeMap = {};
-      const relMap = {};
-      nodes.forEach(n => {
-        const t = n.type || n.node_type || 'Unknown';
-        typeMap[t] = (typeMap[t] || 0) + 1;
-        (n.relationships || n.edges || []).forEach(rel => {
-          const key = `${t} --[${rel.type || rel.rel_type || 'REL'}]--> ${rel.target_type || '?'}`;
-          relMap[key] = (relMap[key] || 0) + 1;
-        });
-      });
-      const typeSummary = Object.entries(typeMap).map(([t, c]) => `<span class="badge badge-layer" style="margin-right:4px;margin-bottom:4px">${t}: ${c}</span>`).join('');
-      const relSummary = Object.entries(relMap).slice(0, 5).map(([r, c]) => `<div style="font-size:11px;color:var(--muted);padding:2px 0">${r}: ${c}</div>`).join('');
-      // Sample memories
-      const samples = nodes.filter(n => (n.type || n.node_type || '') === 'Memory').slice(0, 5);
-      const sampleHTML = samples.length ? `
-        <div style="font-size:11px;color:var(--muted);margin-top:12px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Sample Memories</div>
-        ${samples.map(n => `
-          <div class="mem-mid-item" style="cursor:pointer;border-radius:8px;margin-bottom:4px" onclick="showMemoryNodeDetail(${JSON.stringify(n).replace(/"/g, '&quot;')})">
-            <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(n.text || n.content || n.id || '').slice(0, 80)}</span>
-            <span class="badge badge-layer" style="font-size:10px;flex-shrink:0">${n.type || 'Memory'}</span>
-          </div>
-        `).join('')}
-      ` : '';
-
-      loadingEl.outerHTML = `
-        <div>
-          <div style="margin-bottom:8px">${typeSummary}</div>
-          ${relSummary ? `<div style="margin-bottom:8px">${relSummary}</div>` : ''}
-          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">
-            ${buildGraphSVG(nodes)}
-          </div>
-          ${sampleHTML}
-        </div>
-      `;
-    })
-    .catch(() => {
-      const el = document.getElementById(loadingId);
-      if (el) el.textContent = 'Graph not available';
-    });
-}
-
-function showMemoryNodeDetail(node) {
-  const right = document.getElementById('memRightContent');
-  if (!right) return;
-  // Replace content with memory detail
-  const oldContent = right.innerHTML;
-  // Insert a floating detail overlay within right panel
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:absolute;inset:0;background:var(--surface);overflow-y:auto;z-index:5;border-radius:var(--radius)';
-  overlay.innerHTML = `
-    <div class="mem-detail-content fade-in" style="position:relative">
-      <button onclick="this.closest('[style*=position]').remove()" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px">✕</button>
-      <div class="mem-detail-title" style="padding-right:24px">${(node.text || node.content || 'Memory Node').slice(0, 60)}</div>
-      <div style="margin-bottom:10px">
-        <span class="badge badge-layer">${node.type || node.node_type || 'Memory'}</span>
-      </div>
-      <div class="mem-kv-list">
-        ${node.user_id ? `<div class="mem-kv-row"><span class="mem-kv-key">User ID</span><span class="mem-kv-val">${node.user_id}</span></div>` : ''}
-        ${node.id ? `<div class="mem-kv-row"><span class="mem-kv-key">Node ID</span><span class="mem-kv-val" style="font-size:11px;font-family:monospace">${node.id}</span></div>` : ''}
-        ${node.created_at ? `<div class="mem-kv-row"><span class="mem-kv-key">Created</span><span class="mem-kv-val">${node.created_at.slice(0,10)}</span></div>` : ''}
-        ${node.score !== undefined ? `<div class="mem-kv-row"><span class="mem-kv-key">Score</span><span class="mem-kv-val">${node.score}</span></div>` : ''}
-      </div>
-      ${node.text || node.content ? `
-        <div style="margin-top:14px;font-size:11px;color:var(--muted);margin-bottom:6px">Full Text</div>
-        <div class="mem-detail-preview">${(node.text || node.content || '')}</div>
-      ` : ''}
-    </div>
-  `;
-  right.style.position = 'relative';
-  right.appendChild(overlay);
-}
-
-function renderDetailSystem(m) {
-  const gw = m.gateway || {};
-  const disk = m.disk || {};
-  const rootPct = parseInt(disk.root || '0');
-  const usersPct = parseInt(disk.users || '0');
-  const rootCls = rootPct > 85 ? 'gauge-err' : rootPct > 70 ? 'gauge-warn' : 'gauge-ok';
-  const usersCls = usersPct > 85 ? 'gauge-err' : usersPct > 70 ? 'gauge-warn' : 'gauge-ok';
-  document.getElementById('memRightContent').innerHTML = `
-    <div class="mem-detail-content fade-in">
-      <div class="mem-detail-title">⚙ System</div>
-      <div class="mem-kv-list">
-        <div class="mem-kv-row"><span class="mem-kv-key">Gateway</span><span class="mem-kv-val" style="color:var(--${gw.status==='ok'?'green':'amber'})">${gw.status==='ok'?'✓ Running':'⚠ Warning'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Critical Issues</span><span class="mem-kv-val">${gw.critical_issues ?? 0}</span></div>
-      </div>
-      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px">Disk Usage</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>/ (root)</span><span style="font-weight:600">${disk.root || '—'}</span></div>
-          <div class="gauge-bar-wrap" style="height:6px;border-radius:3px"><div class="gauge-bar-fill ${rootCls}" style="width:${rootPct}%"></div></div>
-        </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>/Users</span><span style="font-weight:600">${disk.users || '—'}</span></div>
-          <div class="gauge-bar-wrap" style="height:6px;border-radius:3px"><div class="gauge-bar-fill ${usersCls}" style="width:${usersPct}%"></div></div>
-        </div>
-      </div>
-      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px">NAS Containers (10.10.10.66)</div>
-      <div class="mem-kv-list">
-        <div class="mem-kv-row"><span class="mem-kv-key">oc-memos-api</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.status==='ok'?'green':'rose'})">${m.l2plus?.status==='ok'?'✓ Running':'✗ Error'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">oc-cognee-api</span><span class="mem-kv-val" style="color:var(--${m.l4?.status==='ok'?'green':'rose'})">${m.l4?.status==='ok'?'✓ Running':'✗ Error'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Neo4j</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.neo4j==='ok'?'green':'rose'})">${m.l2plus?.neo4j==='ok'?'✓ OK':'✗ Error'}</span></div>
-        <div class="mem-kv-row"><span class="mem-kv-key">Qdrant</span><span class="mem-kv-val" style="color:var(--${m.l2plus?.qdrant==='ok'?'green':'rose'})">${m.l2plus?.qdrant==='ok'?'✓ OK':'✗ Error'}</span></div>
-      </div>
-    </div>
-  `;
-}
-
-function shortModel(m) {
-  if (!m || m === 'unknown') return '—';
-  return m.replace('MiniMax-M2.7-highspeed', 'M2.7-HS').replace('openai/', '').replace('anthropic/', '');
-}
-
-// ─── Role description ───
-const roleDescriptions = {
-  admin: '👑 Full access: manage users, tasks, and view all memory layers.',
-  task_manager: '🛠 Manage tasks + view memory layers. Cannot manage users.',
-  viewer: '👁 Read-only access to tasks and dashboard.',
-};
-
-function updateRoleDesc(role) {
-  const box = document.getElementById('roleDescBox');
-  if (!box) return;
-  const desc = roleDescriptions[role] || '';
-  if (desc) { box.textContent = desc; box.style.display = ''; }
-  else { box.style.display = 'none'; }
-}
-
-// ─── New Task Modal ───
-function openNewTaskModal() {
-  document.getElementById('newTaskTitle').value = '';
-  document.getElementById('newTaskPriority').value = 'P2';
-  document.getElementById('newTaskCategory').value = '待處理';
-  document.getElementById('newTaskSubtasks').value = '';
-  document.getElementById('newTaskModal').classList.add('open');
-  setTimeout(() => document.getElementById('newTaskTitle').focus(), 100);
-}
-
-function closeNewTaskModal() {
-  document.getElementById('newTaskModal').classList.remove('open');
-}
-
-function submitNewTask() {
-  const title = document.getElementById('newTaskTitle').value.trim();
-  const priority = document.getElementById('newTaskPriority').value;
-  const category = document.getElementById('newTaskCategory').value;
-  const subtasksRaw = document.getElementById('newTaskSubtasks').value;
-
-  if (!title) {
-    document.getElementById('newTaskTitle').style.borderColor = 'var(--rose)';
-    setTimeout(() => { document.getElementById('newTaskTitle').style.borderColor = ''; }, 2000);
-    return;
-  }
-
-  const subtasks = subtasksRaw.split('\n')
-    .map(s => s.trim().replace(/^[-*]\s*/, ''))
-    .filter(Boolean)
-    .map(text => ({ text, done: false }));
-
-  const payload = { title, priority, category, subtasks };
-
-  fetch('/api/tasks', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(r => {
-    if (r.ok) {
-      closeNewTaskModal();
-      loadData();
-    } else {
-      // If API not available, add locally
-      addTaskLocally(payload);
-    }
-  })
-  .catch(() => addTaskLocally(payload));
-}
-
-function addTaskLocally(payload) {
-  if (!appData) appData = { tasks: [], progress: [], users: [] };
-  if (!appData.tasks) appData.tasks = [];
-  const statusMap = { '進行中': 'in_progress', '待處理': 'pending' };
-  appData.tasks.unshift({
-    id: Date.now(),
-    title: payload.title,
-    priority: payload.priority,
-    status: statusMap[payload.category] || 'pending',
-    category: payload.category,
-    subtasks: payload.subtasks,
-  });
-  closeNewTaskModal();
-  renderTasks(appData.tasks, appData.progress || []);
-}
-
-document.getElementById('newTaskModal').addEventListener('click', function(e) {
-  if (e.target === this) closeNewTaskModal();
-});
-
-// ─── Users (Cloudflare Access email-based) ───
+// ─── Users ───
 let editingUserEmail = null;
 
 function renderUsers(users) {
-  // Migrate old username-based users to email format if needed
   users = users.map(u => ({
     email: u.email || (u.username ? u.username + '@example.com' : ''),
     role: u.role === 'agent' ? 'viewer' : (u.role || 'viewer'),
@@ -1845,23 +1798,14 @@ function renderUsers(users) {
   tbody.innerHTML = '';
   users.forEach((u, idx) => {
     const roleBadgeCls = u.role === 'admin' ? 'badge-p1' : u.role === 'task_manager' ? 'badge-warn' : 'badge-p3';
-    const roleLabel = u.role || 'viewer';
-    const roleDesc = roleDescriptions[u.role] || '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><b>${u.email}</b></td>
-      <td>
-        <span class="badge ${roleBadgeCls}">${roleLabel}</span>
-        ${roleDesc ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;max-width:200px">${roleDesc}</div>` : ''}
-      </td>
+      <td><span class="badge ${roleBadgeCls}">${u.role}</span></td>
       <td style="color:var(--muted)">${u.createdAt || '—'}</td>
       <td>
-        <button class="btn-sm" onclick="openEditRole('${u.email}', '${u.role}')">
-          <span class="i18n-zh">變更角色</span><span class="i18n-en">Edit Role</span>
-        </button>
-        <button class="btn-sm btn-sm-danger" onclick="deleteUser('${u.email}')" style="margin-left:4px">
-          <span class="i18n-zh">刪除</span><span class="i18n-en">Delete</span>
-        </button>
+        <button class="btn-sm" onclick="openEditRole('${u.email}', '${u.role}')">Edit</button>
+        <button class="btn-sm btn-sm-danger" onclick="deleteUser('${u.email}')" style="margin-left:4px">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -1882,7 +1826,6 @@ function closeModal() {
 
 function submitUserModal() {
   const email = document.getElementById('newEmail').value.trim();
-  const role = document.getElementById('newRole').value;
   if (!email || !email.includes('@')) {
     document.getElementById('newEmail').style.borderColor = 'var(--rose)';
     setTimeout(() => { document.getElementById('newEmail').style.borderColor = ''; }, 2000);
@@ -1891,9 +1834,9 @@ function submitUserModal() {
   if (!appData.users) appData.users = [];
   const existing = appData.users.findIndex(u => u.email === email);
   if (existing >= 0) {
-    appData.users[existing].role = role;
+    appData.users[existing].role = document.getElementById('newRole').value;
   } else {
-    appData.users.push({ email, role, createdAt: new Date().toISOString().split('T')[0] });
+    appData.users.push({ email, role: document.getElementById('newRole').value, createdAt: new Date().toISOString().split('T')[0] });
   }
   renderUsers(appData.users);
   closeModal();
@@ -1908,14 +1851,12 @@ function openEditRole(email, currentRole) {
 
 function closeEditRoleModal() {
   document.getElementById('editRoleModal').classList.remove('open');
-  editingUserEmail = null;
 }
 
 function saveEditRole() {
   if (!editingUserEmail || !appData.users) return;
-  const newRole = document.getElementById('editRoleSelect').value;
   const idx = appData.users.findIndex(u => u.email === editingUserEmail);
-  if (idx >= 0) appData.users[idx].role = newRole;
+  if (idx >= 0) appData.users[idx].role = document.getElementById('editRoleSelect').value;
   renderUsers(appData.users);
   closeEditRoleModal();
 }
@@ -1928,17 +1869,106 @@ function deleteUser(email) {
   }
 }
 
-// Close modals on overlay click
 document.getElementById('userModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
+
 document.getElementById('editRoleModal').addEventListener('click', function(e) {
   if (e.target === this) closeEditRoleModal();
 });
 
+document.getElementById('newTaskModal').addEventListener('click', function(e) {
+  if (e.target === this) closeNewTaskModal();
+});
+
+// ─── New Task Modal ───
+function openNewTaskModal() {
+  document.getElementById('newTaskTitle').value = '';
+  document.getElementById('newTaskPriority').value = 'P2';
+  document.getElementById('newTaskCategory').value = '待處理';
+  document.getElementById('newTaskDueDate').value = '';
+  document.getElementById('newTaskAssignee').value = '';
+  document.getElementById('newTaskSubtasks').value = '';
+  document.getElementById('newTaskModal').classList.add('open');
+  setTimeout(() => document.getElementById('newTaskTitle').focus(), 100);
+}
+
+function closeNewTaskModal() {
+  document.getElementById('newTaskModal').classList.remove('open');
+}
+
+function submitNewTask() {
+  const title = document.getElementById('newTaskTitle').value.trim();
+  const priority = document.getElementById('newTaskPriority').value;
+  const category = document.getElementById('newTaskCategory').value;
+  const dueDate = document.getElementById('newTaskDueDate').value;
+  const assignee = document.getElementById('newTaskAssignee').value.trim();
+  const subtasksRaw = document.getElementById('newTaskSubtasks').value;
+
+  if (!title) {
+    document.getElementById('newTaskTitle').style.borderColor = 'var(--rose)';
+    setTimeout(() => { document.getElementById('newTaskTitle').style.borderColor = ''; }, 2000);
+    return;
+  }
+
+  const subtasks = subtasksRaw.split('\n')
+    .map(s => s.trim().replace(/^[-*]\s*/, ''))
+    .filter(Boolean);
+
+  const payload = { title, priority, category, subtasks, dueDate: dueDate || undefined, assignee: assignee || undefined };
+
+  fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(r => {
+    if (r.ok) {
+      closeNewTaskModal();
+      loadData();
+    } else {
+      addTaskLocally(payload);
+    }
+  })
+  .catch(() => addTaskLocally(payload));
+}
+
+function addTaskLocally(payload) {
+  if (!appData) appData = { tasks: [], progress: [], users: [] };
+  if (!appData.tasks) appData.tasks = [];
+  const statusMap = { '進行中': 'in_progress', '待處理': 'pending' };
+  appData.tasks.unshift({
+    id: Date.now(),
+    title: payload.title,
+    priority: payload.priority,
+    status: statusMap[payload.category] || 'pending',
+    category: payload.category,
+    subtasks: payload.subtasks.map(st => ({ text: st, done: false })),
+    dueDate: payload.dueDate || null,
+    assignee: payload.assignee || null,
+    createdDate: new Date().toISOString().split('T')[0],
+    isOverdue: false,
+  });
+  closeNewTaskModal();
+  renderStats(appData.tasks);
+  renderFilters(appData.tasks);
+  renderTasks(appData.tasks, appData.progress || []);
+}
+
+function updateRoleDesc(role) {
+  const box = document.getElementById('roleDescBox');
+  if (!box) return;
+  const descs = {
+    admin: '👑 Full access: manage users, tasks, and view all memory layers.',
+    task_manager: '🛠 Manage tasks + view memory layers.',
+    viewer: '👁 Read-only access.',
+  };
+  if (descs[role]) { box.textContent = descs[role]; box.style.display = ''; }
+  else { box.style.display = 'none'; }
+}
+
 // ─── Init ───
 window.addEventListener('DOMContentLoaded', () => {
-  // Try API first; fallback to embedded data
   loadData();
 });
 </script>
@@ -1954,53 +1984,14 @@ HTMLEOF
 
 echo "HTML generated: $OUTFILE"
 
-# ── Embed initial data into HTML ──
-echo "Embedding initial data..."
-python3 << EMBEDEOF
-import json
-from pathlib import Path
-
-outfile = Path('$OUTFILE')
-tmpjson = Path('$TMPJSON')
-task_data_raw = '''$TASK_DATA'''
-
-html = outfile.read_text(encoding='utf-8')
-
-try:
-    mem_data = json.loads(tmpjson.read_text()) if tmpjson.exists() else {}
-except:
-    mem_data = {}
-
-try:
-    task_data = json.loads(task_data_raw)
-except:
-    task_data = {"tasks": [], "progress": [], "users": []}
-
-merged = {**task_data, "memory": mem_data}
-json_str = json.dumps(merged, ensure_ascii=False)
-
-# Inject before </script> closing of the last script block
-inject = f'\nwindow.__INITIAL_DATA__ = {json_str};\n'
-html = html.replace('// ─── Init ───', inject + '// ─── Init ───')
-
-outfile.write_text(html, encoding='utf-8')
-print(f"Embedded {len(merged.get('tasks', []))} tasks, {len(merged.get('progress', []))} progress entries")
-EMBEDEOF
+echo ""
+echo "✅ Unified Dashboard updated successfully!"
+echo "   Output: $OUTFILE"
+echo "   Time:   $NOW"
 
 # ── Sync to serve directory ──
 SERVE_DIR="$HOME/.openclaw/dashboard-serve"
 mkdir -p "$SERVE_DIR"
 cp "$OUTFILE" "$SERVE_DIR/unified-dashboard.html"
-echo "Copied to: $SERVE_DIR/unified-dashboard.html"
-
-# ── Inject refresh button (using inject-refresh.sh if available) ──
-INJECT_SCRIPT="$HOME/.openclaw/workspace/scripts/inject-refresh.sh"
-if [ -f "$INJECT_SCRIPT" ]; then
-    bash "$INJECT_SCRIPT" 2>/dev/null || true
-fi
-
-echo ""
-echo "✅ Unified Dashboard generated successfully!"
-echo "   Output: $OUTFILE"
+cp "$OUTFILE" "$SERVE_DIR/index.html"
 echo "   Serve:  $SERVE_DIR/unified-dashboard.html"
-echo "   Time:   $NOW"

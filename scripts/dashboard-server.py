@@ -158,15 +158,35 @@ LOGIN_PAGE = (
 # ── Markdown parsers ──────────────────────────────────────────────────────────
 
 def parse_todo(path):
-    """Parse todo.md into structured task list."""
+    """Parse todo.md into structured task list with metadata support.
+
+    Supported metadata line format (after ### header):
+        > 📅 2026-03-23 | ⏰ 2026-03-25 | 👤 scott | 🏷️ 進行中
+    """
     tasks = []
     if not os.path.exists(path):
         return tasks
     with open(path, encoding="utf-8") as f:
         lines = f.readlines()
 
-    category = None
-    current_task = None
+    # Map section header keywords → status
+    SECTION_STATUS_MAP = {
+        "進行中": "in_progress", "In Progress": "in_progress",
+        "已完成": "done",        "Done": "done", "Completed": "done",
+        "待處理": "pending",     "待辦": "pending", "Pending": "pending",
+        "阻塞": "blocked",       "Blocked": "blocked",
+    }
+    # Map 🏷️ label values → status
+    LABEL_STATUS_MAP = {
+        "進行中": "in_progress",
+        "已完成": "done",
+        "待辦":   "pending",
+        "阻塞":   "blocked",
+    }
+
+    category      = None
+    current_task  = None
+    section_status = None
 
     for line in lines:
         line = line.rstrip("\n")
@@ -176,6 +196,11 @@ def parse_todo(path):
         if h2 and not line.startswith('###'):
             category = h2.group(1).strip()
             current_task = None
+            section_status = None
+            for k, v in SECTION_STATUS_MAP.items():
+                if k in category:
+                    section_status = v
+                    break
             continue
 
         # ### [P1] Title (AUTO) or ### [P2] Title
@@ -185,19 +210,44 @@ def parse_todo(path):
             title    = h3.group(3).strip()
             auto     = h3.group(4) is not None
             current_task = {
-                "title": title,
-                "category": category,
-                "priority": f"P{priority}",
-                "auto": auto,
-                "subtasks": [],
+                "title":       title,
+                "category":    category,
+                "priority":    f"P{priority}",
+                "auto":        auto,
+                "status":      section_status or "pending",
+                "subtasks":    [],
+                "createdDate": None,
+                "dueDate":     None,
+                "assignee":    None,
             }
             tasks.append(current_task)
             continue
 
-        # - [x] or - [ ] subtasks
         if current_task is not None:
-            done_m  = re.match(r'^\s*-\s+\[x\]\s+(.+)$', line, re.IGNORECASE)
-            todo_m  = re.match(r'^\s*-\s+\[ \]\s+(.+)$', line)
+            # > metadata line: > 📅 2026-03-23 | ⏰ 2026-03-25 | 👤 scott | 🏷️ 進行中
+            meta_m = re.match(r'^>\s*(.+)$', line)
+            if meta_m:
+                meta_text = meta_m.group(1)
+                cd = re.search(r'📅\s*(\d{4}-\d{2}-\d{2})', meta_text)
+                if cd:
+                    current_task['createdDate'] = cd.group(1)
+                dd = re.search(r'⏰\s*(\d{4}-\d{2}-\d{2})', meta_text)
+                if dd:
+                    current_task['dueDate'] = dd.group(1)
+                av = re.search(r'👤\s*(\S+)', meta_text)
+                if av:
+                    current_task['assignee'] = av.group(1)
+                sv = re.search(r'🏷️\s*(.+?)(?:\s*\||\s*$)', meta_text)
+                if sv:
+                    status_raw = sv.group(1).strip()
+                    mapped = LABEL_STATUS_MAP.get(status_raw)
+                    if mapped:
+                        current_task['status'] = mapped
+                continue
+
+            # - [x] or - [ ] subtasks
+            done_m = re.match(r'^\s*-\s+\[x\]\s+(.+)$', line, re.IGNORECASE)
+            todo_m = re.match(r'^\s*-\s+\[ \]\s+(.+)$', line)
             if done_m:
                 current_task["subtasks"].append({"text": done_m.group(1).strip(), "done": True})
             elif todo_m:
@@ -466,6 +516,15 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     memory = json.load(f)
             except Exception:
                 memory = {}
+        # Overdue detection: mark tasks whose dueDate is in the past and not done
+        today = time.strftime("%Y-%m-%d")
+        for t in tasks:
+            due = t.get("dueDate")
+            status = t.get("status", "pending")
+            if due and due < today and status not in ("done",):
+                t["isOverdue"] = True
+            else:
+                t["isOverdue"] = False
         self._send_json(200, {"tasks": tasks, "progress": progress, "memory": memory, "users": _load_users()})
 
     # ── Memory Tab API ────────────────────────────────────────────────────────
@@ -711,6 +770,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         priority = (body.get("priority") or "P2").strip().upper()
         category = (body.get("category") or "待處理").strip()
         subtasks = body.get("subtasks") or []
+        due_date = (body.get("dueDate") or "").strip()
+        assignee = (body.get("assignee") or "").strip()
 
         if not title:
             self._send_json(400, {"error": "title is required"}); return
@@ -721,7 +782,18 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
         # Build the new task block
         task_lines = [f"\n### [{priority}] {title}"]
+        # Build metadata line if any metadata is provided
+        today_str = time.strftime("%Y-%m-%d")
+        meta_parts = [f"📅 {today_str}"]
+        if due_date:
+            meta_parts.append(f"⏰ {due_date}")
+        if assignee:
+            meta_parts.append(f"👤 {assignee}")
+        meta_parts.append("🏷️ 待辦")
+        task_lines.append(f"> {' | '.join(meta_parts)}")
         for st in subtasks:
+            if isinstance(st, dict):
+                st = st.get("text", "")
             st = str(st).strip()
             if st:
                 task_lines.append(f"- [ ] {st}")
@@ -762,6 +834,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "priority": priority,
                 "category": category,
                 "subtasks": subtasks,
+                "dueDate": due_date or None,
+                "assignee": assignee or None,
             })
         except OSError as e:
             self._send_json(500, {"error": f"File error: {e}"})
@@ -788,7 +862,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             in_target = False
             removed = False
 
-            for line in lines:
+            for i, line in enumerate(lines):
                 stripped = line.rstrip("\n")
                 h3 = re.match(r'^###\s+(\[P(\d)\])?\s*(.*?)(\s*\(AUTO\))?\s*$', stripped)
                 if h3:
@@ -802,13 +876,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                         in_target = False
 
                 if in_target:
-                    # Skip subtask lines belonging to this task
+                    # Skip subtask lines, metadata lines, and notes belonging to this task
                     sub_done = re.match(r'^\s*-\s+\[x\]\s+', stripped, re.IGNORECASE)
                     sub_todo = re.match(r'^\s*-\s+\[ \]\s+', stripped)
-                    if sub_done or sub_todo:
+                    meta_line = re.match(r'^>\s*.+', stripped)
+                    if sub_done or sub_todo or meta_line:
                         continue
                     else:
-                        # Non-subtask line — stop skipping
+                        # Non-subtask/metadata line — stop skipping
                         in_target = False
 
                 new_lines.append(line)
