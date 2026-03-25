@@ -170,10 +170,14 @@ LLM 已從 Qwen2.5-72B-Instruct 遷移至 **MiniMax M2.7 HS**，國內直連無�
 
 ## 相關倉庫
 
-- [openclaw-five-layer-memory-stack](https://github.com/catgodtwno1/openclaw-five-layer-memory-stack) — 層級圖、快速開始、共存矩陣
-- [openclaw-cognee-rollout](https://github.com/catgodtwno1/openclaw-cognee-rollout) — Cognee sidecar 部署、hotfix 腳本
-- [openclaw-memos-server](https://github.com/catgodtwno1/openclaw-memos-server) — MemOS API 格式坑、env 模板
+| 倉庫 | 說明 |
+|------|------|
+| [openclaw-lcm-setup](https://github.com/catgodtwno4/openclaw-lcm-setup) | LCM 安裝配置指南 |
+| [openclaw-dashboard](https://github.com/catgodtwno4/openclaw-dashboard) | OpenClaw 儀表板 |
+| [openclaw-browser](https://github.com/catgodtwno4/openclaw-browser) | 瀏覽器自動化 Skill |
+| [openclaw-im-control](https://github.com/catgodtwno4/openclaw-im-control) | 媒體傳送 Skill |
+| [lossless-claw](https://github.com/catgodtwno4/lossless-claw) | LCM 插件 Fork（含修復） |
 
-## License
+## 許可證
 
 MIT
